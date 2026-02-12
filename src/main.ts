@@ -3,6 +3,7 @@ import { harvester } from "roles/harvester"
 import { builder } from "roles/builder";
 import { miner } from "roles/miner";
 import { mule } from "roles/mule";
+import { upgrader } from "roles/upgrader";
 import { getRoomSpawnPlan } from "spawn/plan";
 import { RoleName, RolePlan } from "types/roles";
 import { getBodyPlan } from "spawn/body";
@@ -87,6 +88,9 @@ export const loop = ErrorMapper.wrapLoop(() => {
         }
         else if (c.memory.role === "builder") {
           builder.run(c)
+        }
+        else if (c.memory.role === "upgrader") {
+          upgrader.run(c)
         }
       }
     }

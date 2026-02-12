@@ -16,28 +16,33 @@ export function getBodyPlan(r: Room) {
       plan = {
         harvester: { work: 1, move: 1, carry: 1 },
         mule: { work: 1, move: 1, carry: 1 },
-        builder: { work: 1, move: 1, carry: 1 }
+        builder: { work: 1, move: 1, carry: 1 },
+        upgrader: { work: 1, move: 1, carry: 1 }
       }
     }
     case "EARLY": {
       plan = {
         harvester: { work: 1, move: 1, carry: 1 },
         mule: { work: 1, move: 1, carry: 1 },
-        builder: { work: 1, move: 1, carry: 1 }
+        builder: { work: 1, move: 1, carry: 1 },
+        upgrader: { work: 1, move: 1, carry: 1 }
       }
     }
     case "MID": {
       plan = {
         harvester: { work: 1, move: 1, carry: 1 },
         mule: { work: 1, move: 1, carry: 1 },
-        builder: { work: 1, move: 1, carry: 1 }
+        builder: { work: 1, move: 1, carry: 1 },
+        upgrader: { work: 1, move: 1, carry: 1 }
+
       }
     }
     case "LATE": {
       plan = {
         harvester: { work: 1, move: 1, carry: 1 },
         mule: { work: 1, move: 1, carry: 1 },
-        builder: { work: 1, move: 1, carry: 1 }
+        builder: { work: 1, move: 1, carry: 1 },
+        upgrader: { work: 1, move: 1, carry: 1 }
       }
     }
   }

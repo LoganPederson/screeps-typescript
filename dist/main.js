@@ -3466,6 +3466,66 @@ const builder = {
     }
 };
 
+const upgrader = {
+    run(c) {
+        let task = getTask(c);
+        let target = getTarget(c);
+        c.pos.findClosestByPath(FIND_MY_SPAWNS);
+        let closestSource = c.pos.findClosestByPath(FIND_SOURCES);
+        if (!task) {
+            task = "harvest";
+        }
+        if (task === "harvest") {
+            // set target
+            if (closestSource) {
+                if (!target) {
+                    setTarget(c, closestSource, "source");
+                }
+                else {
+                    if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                        task = "work";
+                        target = null;
+                        setTask(c, task);
+                        setTarget(c, target);
+                    }
+                    const type = c.memory.targetType;
+                    if (type === "source") {
+                        let t = target;
+                        if (c.harvest(t) == ERR_NOT_IN_RANGE) {
+                            c.moveTo(t);
+                        }
+                    }
+                    if (type === "spawn") {
+                        task = "work";
+                        target = null;
+                        setTask(c, task);
+                        setTarget(c, target);
+                    }
+                }
+            }
+        }
+        else if (task === "work") {
+            if (!target) {
+                let controller = c.room.controller;
+                if (controller) {
+                    target = controller;
+                    setTarget(c, target, "controller");
+                }
+            }
+            else if (c.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
+                setTask(c, "harvest");
+                setTarget(c, null);
+            }
+            else if (c.memory.targetType === "controller") {
+                let controller = Game.getObjectById(target.id);
+                if (c.transfer(controller, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                    c.moveTo(controller);
+                }
+            }
+        }
+    }
+};
+
 function getGamePhase(r) {
     var _a, _b;
     const rcl = (_b = (_a = r.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
@@ -3490,28 +3550,32 @@ function getBodyPlan(r) {
             plan = {
                 harvester: { work: 1, move: 1, carry: 1 },
                 mule: { work: 1, move: 1, carry: 1 },
-                builder: { work: 1, move: 1, carry: 1 }
+                builder: { work: 1, move: 1, carry: 1 },
+                upgrader: { work: 1, move: 1, carry: 1 }
             };
         }
         case "EARLY": {
             plan = {
                 harvester: { work: 1, move: 1, carry: 1 },
                 mule: { work: 1, move: 1, carry: 1 },
-                builder: { work: 1, move: 1, carry: 1 }
+                builder: { work: 1, move: 1, carry: 1 },
+                upgrader: { work: 1, move: 1, carry: 1 }
             };
         }
         case "MID": {
             plan = {
                 harvester: { work: 1, move: 1, carry: 1 },
                 mule: { work: 1, move: 1, carry: 1 },
-                builder: { work: 1, move: 1, carry: 1 }
+                builder: { work: 1, move: 1, carry: 1 },
+                upgrader: { work: 1, move: 1, carry: 1 }
             };
         }
         case "LATE": {
             plan = {
                 harvester: { work: 1, move: 1, carry: 1 },
                 mule: { work: 1, move: 1, carry: 1 },
-                builder: { work: 1, move: 1, carry: 1 }
+                builder: { work: 1, move: 1, carry: 1 },
+                upgrader: { work: 1, move: 1, carry: 1 }
             };
         }
     }
@@ -3528,28 +3592,32 @@ function getRoomSpawnPlan(r) {
             plan = {
                 harvester: { desired: 8, body: bodyPlan.harvester },
                 mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
-                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder }
+                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
+                upgrader: { desired: 1, body: bodyPlan.upgrader }
             };
         }
         case "EARLY": {
             plan = {
                 harvester: { desired: 5, body: bodyPlan.harvester },
                 mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
-                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder }
+                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
+                upgrader: { desired: 1, body: bodyPlan.upgrader }
             };
         }
         case "MID": {
             plan = {
                 harvester: { desired: 5, body: bodyPlan.harvester },
                 mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
-                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder }
+                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
+                upgrader: { desired: 1, body: bodyPlan.upgrader }
             };
         }
         case "LATE": {
             plan = {
                 harvester: { desired: 5, body: bodyPlan.harvester },
                 mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
-                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder }
+                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
+                upgrader: { desired: 1, body: bodyPlan.upgrader }
             };
         }
     }
@@ -3605,6 +3673,9 @@ const loop = ErrorMapper.wrapLoop(() => {
                 }
                 else if (c.memory.role === "builder") {
                     builder.run(c);
+                }
+                else if (c.memory.role === "upgrader") {
+                    upgrader.run(c);
                 }
             }
         }
