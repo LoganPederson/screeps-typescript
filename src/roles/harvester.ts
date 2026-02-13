@@ -46,7 +46,7 @@ export const harvester = {
       if (!target) {
         const closestContainer: AnyStructure | null = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER))
 
-        if (closestContainer) {
+        if (closestContainer && (closestContainer as StructureContainer).store.getFreeCapacity(RESOURCE_ENERGY) != 0) {
           target = closestContainer as StructureContainer
           setTarget(c, target, "container")
         }
@@ -83,7 +83,10 @@ export const harvester = {
       }
       else if (c.memory.targetType === "container") {
         let container = Game.getObjectById(target.id) as StructureContainer
-        if (c.transfer(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+        if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+          setTarget(c, null)
+        }
+        else if (c.transfer(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
           c.moveTo(container)
         }
       }

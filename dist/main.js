@@ -3293,7 +3293,7 @@ const harvester = {
         else if (task === "work") {
             if (!target) {
                 const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
-                if (closestContainer) {
+                if (closestContainer && closestContainer.store.getFreeCapacity(RESOURCE_ENERGY) != 0) {
                     target = closestContainer;
                     setTarget(c, target, "container");
                 }
@@ -3330,7 +3330,10 @@ const harvester = {
             }
             else if (c.memory.targetType === "container") {
                 let container = Game.getObjectById(target.id);
-                if (c.transfer(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                    setTarget(c, null);
+                }
+                else if (c.transfer(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
                     c.moveTo(container);
                 }
             }
@@ -3413,6 +3416,7 @@ const builder = {
                 const storageSites = c.room.find(FIND_MY_CONSTRUCTION_SITES).filter(s => s.structureType === STRUCTURE_STORAGE);
                 const towerSites = c.room.find(FIND_MY_CONSTRUCTION_SITES).filter(s => s.structureType === STRUCTURE_STORAGE);
                 const allSites = c.room.find(FIND_MY_CONSTRUCTION_SITES);
+                const repairables = c.room.find(FIND_STRUCTURES).filter(s => (s.hits / s.hitsMax) < 0.7);
                 if (spawn) {
                     if (extensionSites.length > 0) {
                         let closest = spawn.pos.findClosestByPath(extensionSites);
@@ -3437,10 +3441,16 @@ const builder = {
                     }
                     else if (allSites.length > 0) {
                         let closest = spawn.pos.findClosestByPath(allSites);
-                        console.log(allSites);
                         if (closest) {
                             target = closest;
                             setTarget(c, target, "site");
+                        }
+                    }
+                    else if (repairables.length > 0) {
+                        let closest = c.pos.findClosestByPath(repairables);
+                        if (closest) {
+                            target = closest;
+                            setTarget(c, target, "repair");
                         }
                     }
                 }
@@ -3453,10 +3463,21 @@ const builder = {
                 setTarget(c, target);
             }
             else if (target) {
-                console.log('builder working');
                 if (c.memory.targetType === "site") {
                     let t = target;
-                    if (c.build(t) === ERR_NOT_IN_RANGE) {
+                    if (t.progressTotal === 0) {
+                        setTarget(c, null);
+                    }
+                    else if (c.build(t) === ERR_NOT_IN_RANGE) {
+                        c.moveTo(t);
+                    }
+                }
+                if (c.memory.targetType === "repair") {
+                    let t = target;
+                    if ((t.hits / t.hitsMax) >= 0.8) {
+                        setTarget(c, null);
+                    }
+                    else if (c.repair(t) === ERR_NOT_IN_RANGE) {
                         c.moveTo(t);
                     }
                 }
@@ -3542,25 +3563,43 @@ function getGamePhase(r) {
         return "LATE";
 }
 
+function buildEfficientMiner(r) {
+    var _a;
+    const eAvail = r.energyAvailable;
+    let baseCost = 200;
+    let body = [CARRY, MOVE, WORK];
+    let workToAdd = Math.floor((eAvail - baseCost) / BODYPART_COST[WORK]);
+    for (let i = 0; i < workToAdd; i++) {
+        body.push(WORK);
+    }
+    let bodyWithCount = {};
+    for (const bodypart of body) {
+        bodyWithCount[bodypart] = ((_a = bodyWithCount[bodypart]) !== null && _a !== void 0 ? _a : 0) + 1;
+    }
+    return bodyWithCount;
+}
 function getBodyPlan(r) {
     getGamePhase(r);
     let plan;
+    let hasContainer = r.find(FIND_STRUCTURES).find(s => s.structureType === STRUCTURE_CONTAINER);
     switch (getGamePhase(r)) {
         case "BOOT": {
             plan = {
-                harvester: { work: 1, move: 1, carry: 1 },
+                harvester: hasContainer ? buildEfficientMiner(r) : { work: 1, move: 1, carry: 1 },
                 mule: { work: 1, move: 1, carry: 1 },
                 builder: { work: 1, move: 1, carry: 1 },
                 upgrader: { work: 1, move: 1, carry: 1 }
             };
+            break;
         }
         case "EARLY": {
             plan = {
-                harvester: { work: 1, move: 1, carry: 1 },
+                harvester: buildEfficientMiner(r),
                 mule: { work: 1, move: 1, carry: 1 },
                 builder: { work: 1, move: 1, carry: 1 },
                 upgrader: { work: 1, move: 1, carry: 1 }
             };
+            break;
         }
         case "MID": {
             plan = {
@@ -3569,6 +3608,7 @@ function getBodyPlan(r) {
                 builder: { work: 1, move: 1, carry: 1 },
                 upgrader: { work: 1, move: 1, carry: 1 }
             };
+            break;
         }
         case "LATE": {
             plan = {
@@ -3577,6 +3617,7 @@ function getBodyPlan(r) {
                 builder: { work: 1, move: 1, carry: 1 },
                 upgrader: { work: 1, move: 1, carry: 1 }
             };
+            break;
         }
     }
     return plan;
@@ -3592,7 +3633,7 @@ function getRoomSpawnPlan(r) {
             plan = {
                 harvester: { desired: 8, body: bodyPlan.harvester },
                 mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
-                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
+                builder: { desired: 1, minEnergy: 100, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader }
             };
         }
@@ -3651,7 +3692,7 @@ const loop = ErrorMapper.wrapLoop(() => {
         const plan = getRoomSpawnPlan(r);
         const spawn = r.find(FIND_MY_SPAWNS)[0];
         for (const [roleName, rolePlan] of Object.entries(plan)) {
-            if (((_b = counts[roleName]) !== null && _b !== void 0 ? _b : 0) < rolePlan.desired && !spawn.spawning) {
+            if (((_b = counts[roleName]) !== null && _b !== void 0 ? _b : 0) < rolePlan.desired && !spawn.spawning && (spawn.store.getUsedCapacity(RESOURCE_ENERGY) > rolePlan.desired)) {
                 // spawn creep matching plan
                 let builtBody = [];
                 for (const [part, count] of Object.entries(rolePlan.body)) {

@@ -15,7 +15,7 @@ export function getRoomSpawnPlan(r: Room) {
       plan = {
         harvester: { desired: 8, body: bodyPlan.harvester },
         mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
-        builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
+        builder: { desired: 1, minEnergy: 100, body: bodyPlan.builder },
         upgrader: { desired: 1, body: bodyPlan.upgrader }
       }
     }

@@ -51,6 +51,8 @@ export const builder = {
         const storageSites: ConstructionSite[] = c.room.find(FIND_MY_CONSTRUCTION_SITES).filter(s => s.structureType === STRUCTURE_STORAGE)
         const towerSites: ConstructionSite[] = c.room.find(FIND_MY_CONSTRUCTION_SITES).filter(s => s.structureType === STRUCTURE_STORAGE)
         const allSites: ConstructionSite[] = c.room.find(FIND_MY_CONSTRUCTION_SITES)
+        const repairables: AnyStructure[] = c.room.find(FIND_STRUCTURES).filter(s => (s.hits / s.hitsMax) < 0.7)
+
         if (spawn) {
           if (extensionSites.length > 0) {
             let closest = spawn.pos.findClosestByPath(extensionSites)
@@ -75,10 +77,16 @@ export const builder = {
           }
           else if (allSites.length > 0) {
             let closest = spawn.pos.findClosestByPath(allSites)
-            console.log(allSites)
             if (closest) {
               target = closest
               setTarget(c, target, "site")
+            }
+          }
+          else if (repairables.length > 0) {
+            let closest = c.pos.findClosestByPath(repairables)
+            if (closest) {
+              target = closest
+              setTarget(c, target, "repair")
             }
           }
         }
@@ -91,10 +99,21 @@ export const builder = {
         setTarget(c, target)
       }
       else if (target) {
-        console.log('builder working')
         if (c.memory.targetType === "site") {
           let t = target as ConstructionSite
-          if (c.build(t) === ERR_NOT_IN_RANGE) {
+          if (t.progressTotal === 0) {
+            setTarget(c, null)
+          }
+          else if (c.build(t) === ERR_NOT_IN_RANGE) {
+            c.moveTo(t)
+          }
+        }
+        if (c.memory.targetType === "repair") {
+          let t = target as AnyStructure
+          if ((t.hits / t.hitsMax) >= 0.8) {
+            setTarget(c, null)
+          }
+          else if (c.repair(t) === ERR_NOT_IN_RANGE) {
             c.moveTo(t)
           }
         }

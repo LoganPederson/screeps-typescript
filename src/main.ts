@@ -66,11 +66,12 @@ export const loop = ErrorMapper.wrapLoop(() => {
   for (const roomHash in Game.rooms) {
     // spawn
     console.log(`Processing ${roomHash}`)
+
     const r: Room = Game.rooms[roomHash]
     const plan = getRoomSpawnPlan(r)
     const spawn = r.find(FIND_MY_SPAWNS)[0]
     for (const [roleName, rolePlan] of Object.entries(plan) as [RoleName, RolePlan][]) {
-      if ((counts[roleName] ?? 0) < rolePlan.desired && !spawn.spawning) {
+      if ((counts[roleName] ?? 0) < rolePlan.desired && !spawn.spawning && (spawn.store.getUsedCapacity(RESOURCE_ENERGY) > rolePlan.desired)) {
         // spawn creep matching plan
         let builtBody: BodyPartConstant[] = []
         for (const [part, count] of Object.entries(rolePlan.body) as [BodyPartConstant, number][]) {

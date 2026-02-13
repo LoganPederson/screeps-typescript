@@ -8,7 +8,7 @@ export const getTarget = (c: Creep): _HasId | null => {
   return id ? Game.getObjectById(id) : null
 }
 
-export type TargetType = "source" | "spawn" | "creep" | "controller" | "site" | "container" | "storage" | "extension"
+export type TargetType = "source" | "spawn" | "creep" | "controller" | "site" | "container" | "storage" | "extension" | "repair"
 export function setTarget(c: Creep, target: _HasId | null, type?: TargetType) {
   if (!target) {
     delete c.memory.targetID;
