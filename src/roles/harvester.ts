@@ -10,13 +10,30 @@ export const harvester = {
     let spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS)
     let closestSource = c.pos.findClosestByPath(FIND_SOURCES)
 
+    if (!c.memory.sourceID) {
+      const sources = c.room.find(FIND_SOURCES)
+      const assigned: Partial<Record<Id<Source>, number>> = {}
+      for (let creep of c.room.find(FIND_MY_CREEPS)) {
+        let sid = creep.memory.sourceID as Id<Source>
+        if (sid) {
+          assigned[sid] = (assigned[sid] ?? 0) + 1
+        }
+      }
+      for (let src of sources) {
+        if ((assigned[src.id] ?? 0) < 1) {
+          c.memory.sourceID = src.id
+          break
+        }
+      }
+    }
     if (!task) { task = "harvest" }
 
     if (task === "harvest") {
       // set target
       if (closestSource) {
         if (!target) {
-          setTarget(c, closestSource, "source")
+          if (c.memory.sourceID)
+            setTarget(c, Game.getObjectById(c.memory.sourceID), "source")
         }
         else {
           if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {

@@ -37,9 +37,13 @@ export const builder = {
           if (closestStorageProvider) {
             setTarget(c, closestStorageProvider, "storage")
           }
-          if (closestContainerProvider) {
+          else if (closestContainerProvider) {
             setTarget(c, closestContainerProvider, "container")
           }
+          else if (closestContainer) {
+            setTarget(c, closestContainer, "container")
+          }
+
         }
         else {
           if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {

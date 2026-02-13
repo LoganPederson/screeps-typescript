@@ -3254,10 +3254,27 @@ function setTarget(c, target, type) {
 
 const harvester = {
     run(c) {
+        var _a, _b;
         let task = getTask(c);
         let target = getTarget(c);
         let spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS);
         let closestSource = c.pos.findClosestByPath(FIND_SOURCES);
+        if (!c.memory.sourceID) {
+            const sources = c.room.find(FIND_SOURCES);
+            const assigned = {};
+            for (let creep of c.room.find(FIND_MY_CREEPS)) {
+                let sid = creep.memory.sourceID;
+                if (sid) {
+                    assigned[sid] = ((_a = assigned[sid]) !== null && _a !== void 0 ? _a : 0) + 1;
+                }
+            }
+            for (let src of sources) {
+                if (((_b = assigned[src.id]) !== null && _b !== void 0 ? _b : 0) < 1) {
+                    c.memory.sourceID = src.id;
+                    break;
+                }
+            }
+        }
         if (!task) {
             task = "harvest";
         }
@@ -3265,7 +3282,8 @@ const harvester = {
             // set target
             if (closestSource) {
                 if (!target) {
-                    setTarget(c, closestSource, "source");
+                    if (c.memory.sourceID)
+                        setTarget(c, Game.getObjectById(c.memory.sourceID), "source");
                 }
                 else {
                     if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
@@ -3373,7 +3391,7 @@ const builder = {
         let target = getTarget(c);
         const spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS);
         c.pos.findClosestByPath(FIND_SOURCES);
-        c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
+        const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
         const spawns = c.room.find(FIND_MY_SPAWNS);
         const extensions = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
         const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
@@ -3403,8 +3421,11 @@ const builder = {
                     if (closestStorageProvider) {
                         setTarget(c, closestStorageProvider, "storage");
                     }
-                    if (closestContainerProvider) {
+                    else if (closestContainerProvider) {
                         setTarget(c, closestContainerProvider, "container");
+                    }
+                    else if (closestContainer) {
+                        setTarget(c, closestContainer, "container");
                     }
                 }
                 else {
@@ -3604,7 +3625,7 @@ const upgrader = {
         let target = getTarget(c);
         c.pos.findClosestByPath(FIND_MY_SPAWNS);
         c.pos.findClosestByPath(FIND_SOURCES);
-        c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
+        const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
         const spawns = c.room.find(FIND_MY_SPAWNS);
         const extensions = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
         const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
@@ -3634,8 +3655,11 @@ const upgrader = {
                     if (closestStorageProvider) {
                         setTarget(c, closestStorageProvider, "storage");
                     }
-                    if (closestContainerProvider) {
+                    else if (closestContainerProvider) {
                         setTarget(c, closestContainerProvider, "container");
+                    }
+                    else if (closestContainer) {
+                        setTarget(c, closestContainer, "container");
                     }
                 }
                 else {
@@ -3750,7 +3774,7 @@ function getBodyPlan(r) {
                 harvester: buildEfficientMiner(r),
                 mule: buildEfficientMule(r),
                 builder: buildEfficientBuilder(r),
-                upgrader: { work: 1, move: 1, carry: 1 }
+                upgrader: buildEfficientMiner(r)
             };
             break;
         }
@@ -3822,6 +3846,24 @@ function getRoomSpawnPlan(r) {
     return plan;
 }
 
+// Count Creep
+function getRoleCounts() {
+    var _a;
+    let allRoleCounts = {};
+    for (const roomName in Game.rooms) {
+        const r = Game.rooms[roomName];
+        const counts = {};
+        for (const c in r.find(FIND_MY_CREEPS)) {
+            const creep = Game.creeps[c];
+            const role = creep.memory.role; // Pipe means it can be either Type, union Type
+            if (role)
+                counts[role] = ((_a = counts[role]) !== null && _a !== void 0 ? _a : 0) + 1;
+        }
+        allRoleCounts[roomName] = counts;
+    }
+    return allRoleCounts;
+}
+
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
 const loop = ErrorMapper.wrapLoop(() => {
@@ -3833,21 +3875,16 @@ const loop = ErrorMapper.wrapLoop(() => {
             delete Memory.creeps[name];
         }
     }
-    // Count Creep
-    const counts = {};
-    for (const c in Game.creeps) {
-        const creep = Game.creeps[c];
-        const role = creep.memory.role; // Pipe means it can be either Type, union Type
-        if (role)
-            counts[role] = ((_a = counts[role]) !== null && _a !== void 0 ? _a : 0) + 1;
-    }
+    // Build RoleName Counts one time
+    const allRoleCounts = getRoleCounts();
     // Per Room
     for (const roomHash in Game.rooms) {
-        // spawn
         console.log(`Processing ${roomHash}`);
         const r = Game.rooms[roomHash];
         const plan = getRoomSpawnPlan(r);
         const spawn = r.find(FIND_MY_SPAWNS)[0];
+        const counts = (_a = allRoleCounts[r.name]) !== null && _a !== void 0 ? _a : {};
+        // spawn
         for (const [roleName, rolePlan] of Object.entries(plan)) {
             if (((_b = counts[roleName]) !== null && _b !== void 0 ? _b : 0) < rolePlan.desired && !spawn.spawning && (spawn.store.getUsedCapacity(RESOURCE_ENERGY) > rolePlan.desired)) {
                 // spawn creep matching plan

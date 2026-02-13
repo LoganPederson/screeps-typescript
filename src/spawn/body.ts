@@ -78,7 +78,7 @@ export function getBodyPlan(r: Room) {
         harvester: buildEfficientMiner(r),
         mule: buildEfficientMule(r),
         builder: buildEfficientBuilder(r),
-        upgrader: { work: 1, move: 1, carry: 1 }
+        upgrader: buildEfficientMiner(r)
       }
       break
     }

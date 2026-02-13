@@ -5,7 +5,7 @@ import { miner } from "roles/miner";
 import { mule } from "roles/mule";
 import { upgrader } from "roles/upgrader";
 import { getRoomSpawnPlan } from "spawn/plan";
-import { RoleName, RolePlan } from "types/roles";
+import { RoleName, RolePlan, getRoleCounts } from "types/roles";
 import { getBodyPlan } from "spawn/body";
 import { receiveMessageOnPort } from "worker_threads";
 import { each } from "lodash";
@@ -32,6 +32,7 @@ declare global {
     task?: string;
     targetID?: string;
     targetType?: string;
+    sourceID?: string;
   }
 
 }
@@ -53,23 +54,20 @@ export const loop = ErrorMapper.wrapLoop(() => {
     }
   }
 
-  // Count Creep
-  const counts: Partial<Record<RoleName, number>> = {}
-  for (const c in Game.creeps) {
-    const creep = Game.creeps[c]
-    const role = creep.memory.role as RoleName | undefined // Pipe means it can be either Type, union Type
-    if (role) counts[role] = (counts[role] ?? 0) + 1
-  }
+  // Build RoleName Counts one time
+  const allRoleCounts = getRoleCounts()
 
 
   // Per Room
   for (const roomHash in Game.rooms) {
-    // spawn
     console.log(`Processing ${roomHash}`)
 
     const r: Room = Game.rooms[roomHash]
     const plan = getRoomSpawnPlan(r)
     const spawn = r.find(FIND_MY_SPAWNS)[0]
+    const counts = allRoleCounts[r.name] ?? {}
+
+    // spawn
     for (const [roleName, rolePlan] of Object.entries(plan) as [RoleName, RolePlan][]) {
       if ((counts[roleName] ?? 0) < rolePlan.desired && !spawn.spawning && (spawn.store.getUsedCapacity(RESOURCE_ENERGY) > rolePlan.desired)) {
         // spawn creep matching plan
