@@ -6,20 +6,39 @@ export const builder = {
   run(c: Creep): void {
     let task = getTask(c)
     let target = getTarget(c)
-    let spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS)
-    let closestSource = c.pos.findClosestByPath(FIND_SOURCES)
+    const spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS)
+    const closestSource = c.pos.findClosestByPath(FIND_SOURCES)
+    const closestContainer: AnyStructure | null = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER))
+    const spawns: StructureSpawn[] = c.room.find(FIND_MY_SPAWNS)
+    const extensions: StructureExtension[] = c.room.find(FIND_MY_STRUCTURES).filter((s): s is StructureExtension => s.structureType === STRUCTURE_EXTENSION)
+    const towers: StructureTower[] = c.room.find(FIND_MY_STRUCTURES).filter((s): s is StructureTower => s.structureType === STRUCTURE_TOWER)
+    const containers: StructureContainer[] = c.room.find(FIND_STRUCTURES).filter((s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER)
+    const storages: StructureStorage[] = c.room.find(FIND_STRUCTURES).filter((s): s is StructureStorage => s.structureType === STRUCTURE_STORAGE)
+    const containersNeedingFilling = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4)
+    const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4)
+    const containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8)
+    const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8)
+    const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0))
+    const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0))
+    const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4)
+    const closestTowerNeedingFilling = c.pos.findClosestByPath(towersNeedingFilling)
+    const closestContainerProvider = c.pos.findClosestByPath(containerProviders)
+    const closestContainerNeedingFilling = c.pos.findClosestByPath(containersNeedingFilling)
+    const closestStorageProvider = c.pos.findClosestByPath(storageProviders)
+    const closestStorageNeedingFilling = c.pos.findClosestByPath(storageNeedingFilling)
+    const spawnsAndExtensionsNeedingFilling = [...extensionsNeedingFilling, ...spawnsNeedingFilling]
+    const closestSpawnOrExtensionNeedingFilling = c.pos.findClosestByPath(spawnsAndExtensionsNeedingFilling)
+    if (!task) { c.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? setTask(c, "refillEnergy") : setTask(c, "work") }
 
-    if (!task) { task = "harvest" }
-
-    if (task == "harvest") {
+    if (task === "refillEnergy") {
       // set target
-      if (spawn && closestSource) {
+      if (true) {
         if (!target) {
-          if (spawn.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-            setTarget(c, spawn, "spawn")
+          if (closestStorageProvider) {
+            setTarget(c, closestStorageProvider, "storage")
           }
-          else {
-            setTarget(c, closestSource, "source")
+          if (closestContainerProvider) {
+            setTarget(c, closestContainerProvider, "container")
           }
         }
         else {
@@ -29,18 +48,8 @@ export const builder = {
             setTask(c, task)
             setTarget(c, target)
           }
-          const type = c.memory.targetType
-          if (type === "source") {
-            let t = target as Source
-            if (c.harvest(t) == ERR_NOT_IN_RANGE) {
-              c.moveTo(t)
-            }
-          }
-          else if (type === "spawn") {
-            let t = target as StructureSpawn
-            if (c.withdraw(t, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-              c.moveTo(t)
-            }
+          else if (c.withdraw(target as AnyStoreStructure, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            c.moveTo(target as AnyStoreStructure)
           }
         }
       }
@@ -93,7 +102,7 @@ export const builder = {
       }
       // Base Case
       else if (c.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
-        task = "harvest"
+        task = "refillEnergy"
         target = null
         setTask(c, task)
         setTarget(c, target)

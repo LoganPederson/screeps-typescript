@@ -10,7 +10,7 @@ export const mule = {
     let target = getTarget(c)
     const spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS)
     const closestSource = c.pos.findClosestByPath(FIND_SOURCES)
-    const closestContainer: AnyStructure | null = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER))
+    const closestContainer: StructureContainer | null = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter((s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER))
     const spawns: StructureSpawn[] = c.room.find(FIND_MY_SPAWNS)
     const extensions: StructureExtension[] = c.room.find(FIND_MY_STRUCTURES).filter((s): s is StructureExtension => s.structureType === STRUCTURE_EXTENSION)
     const towers: StructureTower[] = c.room.find(FIND_MY_STRUCTURES).filter((s): s is StructureTower => s.structureType === STRUCTURE_TOWER)
@@ -41,6 +41,9 @@ export const mule = {
           }
           if (closestContainerProvider) {
             setTarget(c, closestContainerProvider, "container")
+          }
+          else {
+            setTarget(c, closestContainer)
           }
         }
         else {
@@ -78,7 +81,6 @@ export const mule = {
           setTarget(c, closestStorageNeedingFilling, "storage")
         }
         else {
-          c.say("Bored!")
           const idleLocation = c.room.find(FIND_FLAGS).filter((f) => f.name as FlagType === "muleIdle")
           if (c.pos.findClosestByPath(idleLocation)) {
             if (idleLocation.length > 0) {

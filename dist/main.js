@@ -3371,20 +3371,40 @@ const builder = {
     run(c) {
         let task = getTask(c);
         let target = getTarget(c);
-        let spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS);
-        let closestSource = c.pos.findClosestByPath(FIND_SOURCES);
+        const spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS);
+        c.pos.findClosestByPath(FIND_SOURCES);
+        c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
+        const spawns = c.room.find(FIND_MY_SPAWNS);
+        const extensions = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
+        const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
+        const containers = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER);
+        const storages = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_STORAGE);
+        const containersNeedingFilling = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        const containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
+        const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
+        const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        c.pos.findClosestByPath(towersNeedingFilling);
+        const closestContainerProvider = c.pos.findClosestByPath(containerProviders);
+        c.pos.findClosestByPath(containersNeedingFilling);
+        const closestStorageProvider = c.pos.findClosestByPath(storageProviders);
+        c.pos.findClosestByPath(storageNeedingFilling);
+        const spawnsAndExtensionsNeedingFilling = [...extensionsNeedingFilling, ...spawnsNeedingFilling];
+        c.pos.findClosestByPath(spawnsAndExtensionsNeedingFilling);
         if (!task) {
-            task = "harvest";
+            c.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? setTask(c, "refillEnergy") : setTask(c, "work");
         }
-        if (task == "harvest") {
+        if (task === "refillEnergy") {
             // set target
-            if (spawn && closestSource) {
+            {
                 if (!target) {
-                    if (spawn.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
-                        setTarget(c, spawn, "spawn");
+                    if (closestStorageProvider) {
+                        setTarget(c, closestStorageProvider, "storage");
                     }
-                    else {
-                        setTarget(c, closestSource, "source");
+                    if (closestContainerProvider) {
+                        setTarget(c, closestContainerProvider, "container");
                     }
                 }
                 else {
@@ -3394,18 +3414,8 @@ const builder = {
                         setTask(c, task);
                         setTarget(c, target);
                     }
-                    const type = c.memory.targetType;
-                    if (type === "source") {
-                        let t = target;
-                        if (c.harvest(t) == ERR_NOT_IN_RANGE) {
-                            c.moveTo(t);
-                        }
-                    }
-                    else if (type === "spawn") {
-                        let t = target;
-                        if (c.withdraw(t, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-                            c.moveTo(t);
-                        }
+                    else if (c.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                        c.moveTo(target);
                     }
                 }
             }
@@ -3457,7 +3467,7 @@ const builder = {
             }
             // Base Case
             else if (c.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
-                task = "harvest";
+                task = "refillEnergy";
                 target = null;
                 setTask(c, task);
                 setTarget(c, target);
@@ -3493,7 +3503,7 @@ const mule = {
         let target = getTarget(c);
         c.pos.findClosestByPath(FIND_MY_SPAWNS);
         c.pos.findClosestByPath(FIND_SOURCES);
-        c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
+        const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER));
         const spawns = c.room.find(FIND_MY_SPAWNS);
         const extensions = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
         const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
@@ -3525,6 +3535,9 @@ const mule = {
                     }
                     if (closestContainerProvider) {
                         setTarget(c, closestContainerProvider, "container");
+                    }
+                    else {
+                        setTarget(c, closestContainer);
                     }
                 }
                 else {
@@ -3560,7 +3573,6 @@ const mule = {
                     setTarget(c, closestStorageNeedingFilling, "storage");
                 }
                 else {
-                    c.say("Bored!");
                     const idleLocation = c.room.find(FIND_FLAGS).filter((f) => f.name === "muleIdle");
                     if (c.pos.findClosestByPath(idleLocation)) {
                         if (idleLocation.length > 0) {
