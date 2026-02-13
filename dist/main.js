@@ -3236,7 +3236,7 @@ class ErrorMapper {
 // Cache previously mapped traces to improve performance
 ErrorMapper.cache = {};
 
-const getTask = (c) => { var _a; return ((_a = c.memory.task) !== null && _a !== void 0 ? _a : "harvest"); };
+const getTask = (c) => c.memory.task;
 const setTask = (c, t) => { c.memory.task = t; };
 const getTarget = (c) => {
     const id = c.memory.targetID;
@@ -3293,7 +3293,7 @@ const harvester = {
         else if (task === "work") {
             if (!target) {
                 const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
-                if (closestContainer && closestContainer.store.getFreeCapacity(RESOURCE_ENERGY) != 0) {
+                if (closestContainer) {
                     target = closestContainer;
                     setTarget(c, target, "container");
                 }
@@ -3487,20 +3487,45 @@ const builder = {
     }
 };
 
-const upgrader = {
+const mule = {
     run(c) {
         let task = getTask(c);
         let target = getTarget(c);
         c.pos.findClosestByPath(FIND_MY_SPAWNS);
-        let closestSource = c.pos.findClosestByPath(FIND_SOURCES);
+        c.pos.findClosestByPath(FIND_SOURCES);
+        c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
+        const spawns = c.room.find(FIND_MY_SPAWNS);
+        const extensions = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
+        const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
+        const containers = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER);
+        const storages = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_STORAGE);
+        const containersNeedingFilling = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        const containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
+        const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
+        const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        const closestTowerNeedingFilling = c.pos.findClosestByPath(towersNeedingFilling);
+        const closestContainerProvider = c.pos.findClosestByPath(containerProviders);
+        const closestContainerNeedingFilling = c.pos.findClosestByPath(containersNeedingFilling);
+        const closestStorageProvider = c.pos.findClosestByPath(storageProviders);
+        const closestStorageNeedingFilling = c.pos.findClosestByPath(storageNeedingFilling);
+        const spawnsAndExtensionsNeedingFilling = [...extensionsNeedingFilling, ...spawnsNeedingFilling];
+        const closestSpawnOrExtensionNeedingFilling = c.pos.findClosestByPath(spawnsAndExtensionsNeedingFilling);
         if (!task) {
-            task = "harvest";
+            c.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? setTask(c, "refillEnergy") : setTask(c, "work");
         }
-        if (task === "harvest") {
+        if (task === "refillEnergy") {
             // set target
-            if (closestSource) {
+            {
                 if (!target) {
-                    setTarget(c, closestSource, "source");
+                    if (closestStorageProvider) {
+                        setTarget(c, closestStorageProvider, "storage");
+                    }
+                    if (closestContainerProvider) {
+                        setTarget(c, closestContainerProvider, "container");
+                    }
                 }
                 else {
                     if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
@@ -3509,39 +3534,123 @@ const upgrader = {
                         setTask(c, task);
                         setTarget(c, target);
                     }
-                    const type = c.memory.targetType;
-                    if (type === "source") {
-                        let t = target;
-                        if (c.harvest(t) == ERR_NOT_IN_RANGE) {
-                            c.moveTo(t);
-                        }
-                    }
-                    if (type === "spawn") {
-                        task = "work";
-                        target = null;
-                        setTask(c, task);
-                        setTarget(c, target);
+                    else if (c.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                        c.moveTo(target);
                     }
                 }
             }
         }
         else if (task === "work") {
             if (!target) {
-                let controller = c.room.controller;
-                if (controller) {
-                    target = controller;
-                    setTarget(c, target, "controller");
+                if (closestSpawnOrExtensionNeedingFilling) {
+                    if (closestSpawnOrExtensionNeedingFilling.structureType === STRUCTURE_SPAWN) {
+                        setTarget(c, closestSpawnOrExtensionNeedingFilling, "spawn");
+                    }
+                    if (closestSpawnOrExtensionNeedingFilling.structureType === STRUCTURE_EXTENSION) {
+                        setTarget(c, closestSpawnOrExtensionNeedingFilling, "extension");
+                    }
+                }
+                else if (closestTowerNeedingFilling) {
+                    setTarget(c, closestTowerNeedingFilling, "tower");
+                }
+                else if (closestContainerNeedingFilling) {
+                    setTarget(c, closestContainerNeedingFilling, "container");
+                }
+                else if (closestStorageNeedingFilling) {
+                    setTarget(c, closestStorageNeedingFilling, "storage");
+                }
+                else {
+                    c.say("Bored!");
+                    const idleLocation = c.room.find(FIND_FLAGS).filter((f) => f.name === "muleIdle");
+                    if (c.pos.findClosestByPath(idleLocation)) {
+                        if (idleLocation.length > 0) {
+                            let closest = c.pos.findClosestByPath(idleLocation);
+                            if (closest) {
+                                c.moveTo(closest);
+                            }
+                        }
+                    }
                 }
             }
             else if (c.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
-                setTask(c, "harvest");
+                setTask(c, "refillEnergy");
                 setTarget(c, null);
             }
-            else if (c.memory.targetType === "controller") {
-                let controller = Game.getObjectById(target.id);
-                if (c.transfer(controller, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                    c.moveTo(controller);
+            else if (target.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                setTarget(c, null);
+            }
+            else if (c.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                c.moveTo(target);
+            }
+        }
+    }
+};
+
+const upgrader = {
+    run(c) {
+        let task = getTask(c);
+        let target = getTarget(c);
+        c.pos.findClosestByPath(FIND_MY_SPAWNS);
+        c.pos.findClosestByPath(FIND_SOURCES);
+        c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
+        const spawns = c.room.find(FIND_MY_SPAWNS);
+        const extensions = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
+        const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
+        const containers = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER);
+        const storages = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_STORAGE);
+        const containersNeedingFilling = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        const containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
+        const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
+        const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        c.pos.findClosestByPath(towersNeedingFilling);
+        const closestContainerProvider = c.pos.findClosestByPath(containerProviders);
+        c.pos.findClosestByPath(containersNeedingFilling);
+        const closestStorageProvider = c.pos.findClosestByPath(storageProviders);
+        c.pos.findClosestByPath(storageNeedingFilling);
+        const spawnsAndExtensionsNeedingFilling = [...extensionsNeedingFilling, ...spawnsNeedingFilling];
+        c.pos.findClosestByPath(spawnsAndExtensionsNeedingFilling);
+        if (!task) {
+            c.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? setTask(c, "refillEnergy") : setTask(c, "work");
+        }
+        if (task === "refillEnergy") {
+            // set target
+            {
+                if (!target) {
+                    if (closestStorageProvider) {
+                        setTarget(c, closestStorageProvider, "storage");
+                    }
+                    if (closestContainerProvider) {
+                        setTarget(c, closestContainerProvider, "container");
+                    }
                 }
+                else {
+                    if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                        task = "work";
+                        target = null;
+                        setTask(c, task);
+                        setTarget(c, target);
+                    }
+                    else if (c.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                        c.moveTo(target);
+                    }
+                }
+            }
+        }
+        else if (task === "work") {
+            if (!target) {
+                if (c.room.controller) {
+                    setTarget(c, c.room.controller, "controller");
+                }
+            }
+            else if (c.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
+                setTask(c, "refillEnergy");
+                setTarget(c, null);
+            }
+            else if (c.upgradeController(target) === ERR_NOT_IN_RANGE) {
+                c.moveTo(target);
             }
         }
     }
@@ -3578,6 +3687,38 @@ function buildEfficientMiner(r) {
     }
     return bodyWithCount;
 }
+function buildEfficientMule(r) {
+    var _a;
+    const eAvail = r.energyAvailable;
+    let baseCost = 250;
+    let body = [CARRY, MOVE, WORK, MOVE];
+    let carryToAdd = Math.floor((eAvail - baseCost) / BODYPART_COST[CARRY]);
+    for (let i = 0; i < (Math.floor(carryToAdd / 2)); i++) {
+        body.push(CARRY);
+        body.push(MOVE);
+    }
+    let bodyWithCount = {};
+    for (const bodypart of body) {
+        bodyWithCount[bodypart] = ((_a = bodyWithCount[bodypart]) !== null && _a !== void 0 ? _a : 0) + 1;
+    }
+    return bodyWithCount;
+}
+function buildEfficientBuilder(r) {
+    var _a;
+    const eAvail = r.energyAvailable;
+    let body = [];
+    for (let i = 0; i < (Math.floor(eAvail / 250)); i++) {
+        body.push(CARRY);
+        body.push(MOVE);
+        body.push(WORK);
+        body.push(MOVE);
+    }
+    let bodyWithCount = {};
+    for (const bodypart of body) {
+        bodyWithCount[bodypart] = ((_a = bodyWithCount[bodypart]) !== null && _a !== void 0 ? _a : 0) + 1;
+    }
+    return bodyWithCount;
+}
 function getBodyPlan(r) {
     getGamePhase(r);
     let plan;
@@ -3595,8 +3736,8 @@ function getBodyPlan(r) {
         case "EARLY": {
             plan = {
                 harvester: buildEfficientMiner(r),
-                mule: { work: 1, move: 1, carry: 1 },
-                builder: { work: 1, move: 1, carry: 1 },
+                mule: buildEfficientMule(r),
+                builder: buildEfficientBuilder(r),
                 upgrader: { work: 1, move: 1, carry: 1 }
             };
             break;
@@ -3636,14 +3777,16 @@ function getRoomSpawnPlan(r) {
                 builder: { desired: 1, minEnergy: 100, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader }
             };
+            break;
         }
         case "EARLY": {
             plan = {
-                harvester: { desired: 5, body: bodyPlan.harvester },
-                mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
-                builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
-                upgrader: { desired: 1, body: bodyPlan.upgrader }
+                harvester: { desired: 3, minEnergy: 300, body: bodyPlan.harvester },
+                mule: { desired: 2, minEnergy: 300, body: bodyPlan.mule },
+                builder: { desired: (r.find(FIND_CONSTRUCTION_SITES).length > 0) ? 3 : 1, minEnergy: 250, body: bodyPlan.builder },
+                upgrader: { desired: 2, body: bodyPlan.upgrader }
             };
+            break;
         }
         case "MID": {
             plan = {
@@ -3652,6 +3795,7 @@ function getRoomSpawnPlan(r) {
                 builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader }
             };
+            break;
         }
         case "LATE": {
             plan = {
@@ -3660,6 +3804,7 @@ function getRoomSpawnPlan(r) {
                 builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader }
             };
+            break;
         }
     }
     return plan;
@@ -3717,6 +3862,9 @@ const loop = ErrorMapper.wrapLoop(() => {
                 }
                 else if (c.memory.role === "upgrader") {
                     upgrader.run(c);
+                }
+                else if (c.memory.role === "mule") {
+                    mule.run(c);
                 }
             }
         }

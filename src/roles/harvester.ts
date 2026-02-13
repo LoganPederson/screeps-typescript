@@ -46,7 +46,7 @@ export const harvester = {
       if (!target) {
         const closestContainer: AnyStructure | null = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER))
 
-        if (closestContainer && (closestContainer as StructureContainer).store.getFreeCapacity(RESOURCE_ENERGY) != 0) {
+        if (closestContainer) {
           target = closestContainer as StructureContainer
           setTarget(c, target, "container")
         }

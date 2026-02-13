@@ -18,14 +18,16 @@ export function getRoomSpawnPlan(r: Room) {
         builder: { desired: 1, minEnergy: 100, body: bodyPlan.builder },
         upgrader: { desired: 1, body: bodyPlan.upgrader }
       }
+      break
     }
     case "EARLY": {
       plan = {
-        harvester: { desired: 5, body: bodyPlan.harvester },
-        mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
-        builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
-        upgrader: { desired: 1, body: bodyPlan.upgrader }
+        harvester: { desired: 3, minEnergy: 300, body: bodyPlan.harvester },
+        mule: { desired: 2, minEnergy: 300, body: bodyPlan.mule },
+        builder: { desired: (r.find(FIND_CONSTRUCTION_SITES).length > 0) ? 3 : 1, minEnergy: 250, body: bodyPlan.builder },
+        upgrader: { desired: 2, body: bodyPlan.upgrader }
       }
+      break
     }
     case "MID": {
       plan = {
@@ -34,6 +36,7 @@ export function getRoomSpawnPlan(r: Room) {
         builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
         upgrader: { desired: 1, body: bodyPlan.upgrader }
       }
+      break
     }
     case "LATE": {
       plan = {
@@ -42,6 +45,7 @@ export function getRoomSpawnPlan(r: Room) {
         builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
         upgrader: { desired: 1, body: bodyPlan.upgrader }
       }
+      break
     }
   }
 

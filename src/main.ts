@@ -93,6 +93,9 @@ export const loop = ErrorMapper.wrapLoop(() => {
         else if (c.memory.role === "upgrader") {
           upgrader.run(c)
         }
+        else if (c.memory.role === "mule") {
+          mule.run(c)
+        }
       }
     }
   }

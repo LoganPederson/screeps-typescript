@@ -1,3 +1,4 @@
+import { FlagType } from "types/flags"
 import { RoleName } from "types/roles"
 import { getTask, setTask } from "utility/memory"
 import { getTarget, setTarget, TargetType } from "utility/memory"
@@ -29,9 +30,7 @@ export const mule = {
     const closestStorageNeedingFilling = c.pos.findClosestByPath(storageNeedingFilling)
     const spawnsAndExtensionsNeedingFilling = [...extensionsNeedingFilling, ...spawnsNeedingFilling]
     const closestSpawnOrExtensionNeedingFilling = c.pos.findClosestByPath(spawnsAndExtensionsNeedingFilling)
-
-
-    if (!task) { c.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? task = "refillEnergy" : task = "work" }
+    if (!task) { c.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? setTask(c, "refillEnergy") : setTask(c, "work") }
 
     if (task === "refillEnergy") {
       // set target
@@ -51,19 +50,8 @@ export const mule = {
             setTask(c, task)
             setTarget(c, target)
           }
-          const type = c.memory.targetType
-          if (type === "source") {
-            let t = target as Source
-            if (c.harvest(t) == ERR_NOT_IN_RANGE) {
-              c.moveTo(t)
-            }
-          }
-          if (type === "spawn") {
-            let t = target as StructureSpawn
-            task = "work"
-            target = null
-            setTask(c, task)
-            setTarget(c, target)
+          else if (c.withdraw(target as AnyStoreStructure, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            c.moveTo(target as AnyStoreStructure)
           }
         }
       }
@@ -90,11 +78,20 @@ export const mule = {
           setTarget(c, closestStorageNeedingFilling, "storage")
         }
         else {
-          c.say("Nothing to do!")
+          c.say("Bored!")
+          const idleLocation = c.room.find(FIND_FLAGS).filter((f) => f.name as FlagType === "muleIdle")
+          if (c.pos.findClosestByPath(idleLocation)) {
+            if (idleLocation.length > 0) {
+              let closest = c.pos.findClosestByPath(idleLocation)
+              if (closest) {
+                c.moveTo(closest)
+              }
+            }
+          }
         }
       }
       else if (c.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
-        setTask(c, "harvest")
+        setTask(c, "refillEnergy")
         setTarget(c, null)
       }
       else if ((target as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) === 0) {

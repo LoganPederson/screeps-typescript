@@ -1,6 +1,6 @@
 import { TaskName } from "types/tasks"
 
-export const getTask = (c: Creep): TaskName => (c.memory.task as TaskName ?? "harvest")
+export const getTask = (c: Creep): TaskName => (c.memory.task as TaskName)
 export const setTask = (c: Creep, t: TaskName) => { c.memory.task = t }
 
 export const getTarget = (c: Creep): _HasId | null => {
