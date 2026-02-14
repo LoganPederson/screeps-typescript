@@ -9,6 +9,7 @@ import { RoleName, RolePlan, getRoleCounts } from "types/roles";
 import { getBodyPlan } from "spawn/body";
 import { receiveMessageOnPort } from "worker_threads";
 import { each } from "lodash";
+import { tower } from "roles/tower";
 
 declare global {
   /*
@@ -95,6 +96,11 @@ export const loop = ErrorMapper.wrapLoop(() => {
           mule.run(c)
         }
       }
+    }
+    // tower
+    const towers: StructureTower[] = r.find(FIND_MY_STRUCTURES).filter((s): s is StructureTower => s.structureType === STRUCTURE_TOWER)
+    for (let t of towers) {
+      tower.run(t)
     }
   }
 

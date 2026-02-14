@@ -3252,13 +3252,133 @@ function setTarget(c, target, type) {
     c.memory.targetType = type;
 }
 
+// Count Creep
+function getRoleCounts() {
+    var _a;
+    let allRoleCounts = {};
+    for (const roomName in Game.rooms) {
+        const r = Game.rooms[roomName];
+        const counts = {};
+        for (const c of r.find(FIND_MY_CREEPS)) {
+            const role = c.memory.role; // Pipe means it can be either Type, union Type
+            if (role)
+                counts[role] = ((_a = counts[role]) !== null && _a !== void 0 ? _a : 0) + 1;
+        }
+        allRoleCounts[roomName] = counts;
+    }
+    return allRoleCounts;
+}
+
 const harvester = {
     run(c) {
         var _a, _b;
-        let task = getTask(c);
-        let target = getTarget(c);
         let spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS);
         let closestSource = c.pos.findClosestByPath(FIND_SOURCES);
+        const roleCounts = getRoleCounts();
+        function findHarvestTarget(c) {
+            if (c.memory.sourceID) {
+                setTarget(c, Game.getObjectById(c.memory.sourceID), "source");
+            }
+            else {
+                c.say("No sourceID!");
+            }
+        }
+        function findWorkTarget(c) {
+            var _a, _b;
+            const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER));
+            if (closestContainer && (((_b = (_a = roleCounts[c.room.name]) === null || _a === void 0 ? void 0 : _a.mule) !== null && _b !== void 0 ? _b : 0) > 0)) {
+                setTarget(c, closestContainer, "container");
+            }
+            else if (spawn && spawn.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+                setTarget(c, spawn, "spawn");
+            }
+            else {
+                let controller = c.room.controller;
+                if (controller) {
+                    setTarget(c, controller, "controller");
+                }
+            }
+        }
+        function doHarvest(c) {
+            // set target
+            if (closestSource) {
+                if (!c.memory.targetID) {
+                    findHarvestTarget(c);
+                }
+                if (c.memory.targetID) {
+                    if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                        setTask(c, "work");
+                        findWorkTarget(c);
+                        doWork(c);
+                    }
+                    const type = c.memory.targetType;
+                    if (type === "source") {
+                        let t = Game.getObjectById(c.memory.targetID);
+                        if (c.harvest(t) == ERR_NOT_IN_RANGE) {
+                            c.moveTo(t);
+                        }
+                    }
+                }
+            }
+        }
+        function doWork(c) {
+            if (!c.memory.targetID) {
+                findWorkTarget(c);
+            }
+            if (c.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
+                setTask(c, "harvest");
+                findHarvestTarget(c);
+                doHarvest(c);
+            }
+            else if (c.memory.targetType === "spawn" && spawn) {
+                if (spawn.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                    let extensionsNotFull = c.room.find(FIND_MY_STRUCTURES).filter(s => s.structureType === "extension" && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
+                    if (extensionsNotFull.length > 0) {
+                        let closestExtension = c.pos.findClosestByPath(extensionsNotFull);
+                        if (closestExtension) {
+                            setTarget(c, closestExtension, "extension");
+                            doWork(c);
+                        }
+                    }
+                }
+                else if (c.transfer(spawn, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                    c.moveTo(spawn);
+                }
+            }
+            else if (c.memory.targetType === "container" && c.memory.targetID) {
+                let container = Game.getObjectById(c.memory.targetID);
+                if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                    c.say("Container full!");
+                }
+                else if (c.transfer(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                    c.moveTo(container);
+                }
+            }
+            else if (c.memory.targetType === "controller" && c.memory.targetID) {
+                let controller = Game.getObjectById(c.memory.targetID);
+                if (c.upgradeController(controller) === ERR_NOT_IN_RANGE) {
+                    c.moveTo(controller);
+                }
+            }
+            else if (c.memory.targetType === "extension" && c.memory.targetID) {
+                let extension = Game.getObjectById(c.memory.targetID);
+                if (extension.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                    let extensionsNotFull = c.room.find(FIND_MY_STRUCTURES).filter(s => s.structureType === "extension" && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
+                    if (extensionsNotFull.length > 0) {
+                        let closestExtension = c.pos.findClosestByPath(extensionsNotFull);
+                        if (closestExtension) {
+                            setTarget(c, closestExtension, "extension");
+                        }
+                    }
+                    else {
+                        findWorkTarget(c);
+                    }
+                }
+                else if (c.transfer(extension, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                    c.moveTo(extension);
+                }
+            }
+        }
         if (!c.memory.sourceID) {
             const sources = c.room.find(FIND_SOURCES);
             const assigned = {};
@@ -3275,112 +3395,14 @@ const harvester = {
                 }
             }
         }
-        if (!task) {
-            task = "harvest";
+        if (!c.memory.task) {
+            setTask(c, "harvest");
         }
-        if (task === "harvest") {
-            // set target
-            if (closestSource) {
-                if (!target) {
-                    if (c.memory.sourceID)
-                        setTarget(c, Game.getObjectById(c.memory.sourceID), "source");
-                }
-                else {
-                    if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
-                        task = "work";
-                        target = null;
-                        setTask(c, task);
-                        setTarget(c, target);
-                    }
-                    const type = c.memory.targetType;
-                    if (type === "source") {
-                        let t = target;
-                        if (c.harvest(t) == ERR_NOT_IN_RANGE) {
-                            c.moveTo(t);
-                        }
-                    }
-                    if (type === "spawn") {
-                        task = "work";
-                        target = null;
-                        setTask(c, task);
-                        setTarget(c, target);
-                    }
-                }
-            }
+        if (c.memory.task === "harvest") {
+            doHarvest(c);
         }
-        else if (task === "work") {
-            if (!target) {
-                const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
-                if (closestContainer) {
-                    target = closestContainer;
-                    setTarget(c, target, "container");
-                }
-                else if (spawn && spawn.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-                    target = spawn;
-                    setTarget(c, target, "spawn");
-                }
-                else {
-                    let controller = c.room.controller;
-                    if (controller) {
-                        target = controller;
-                        setTarget(c, target, "controller");
-                    }
-                }
-            }
-            else if (c.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
-                setTask(c, "harvest");
-                setTarget(c, null);
-            }
-            else if (c.memory.targetType === "spawn" && spawn) {
-                if (spawn.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
-                    let extensionsNotFull = c.room.find(FIND_MY_STRUCTURES).filter(s => s.structureType === "extension" && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
-                    if (extensionsNotFull.length > 0) {
-                        let closestExtension = c.pos.findClosestByPath(extensionsNotFull);
-                        if (closestExtension) {
-                            target = closestExtension;
-                            setTarget(c, target, "extension");
-                        }
-                    }
-                }
-                else if (c.transfer(spawn, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                    c.moveTo(spawn);
-                }
-            }
-            else if (c.memory.targetType === "container") {
-                let container = Game.getObjectById(target.id);
-                if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
-                    setTarget(c, null);
-                }
-                else if (c.transfer(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                    c.moveTo(container);
-                }
-            }
-            else if (c.memory.targetType === "controller") {
-                let controller = Game.getObjectById(target.id);
-                if (c.transfer(controller, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                    c.moveTo(controller);
-                }
-            }
-            else if (c.memory.targetType === "extension") {
-                let extension = Game.getObjectById(target.id);
-                if (extension.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
-                    let extensionsNotFull = c.room.find(FIND_MY_STRUCTURES).filter(s => s.structureType === "extension" && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
-                    if (extensionsNotFull.length > 0) {
-                        let closestExtension = c.pos.findClosestByPath(extensionsNotFull);
-                        if (closestExtension) {
-                            target = closestExtension;
-                            setTarget(c, target, "extension");
-                        }
-                    }
-                    else {
-                        target = null;
-                        setTarget(c, target);
-                    }
-                }
-                else if (c.transfer(extension, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                    c.moveTo(extension);
-                }
-            }
+        else if (c.memory.task === "work") {
+            doWork(c);
         }
     }
 };
@@ -3530,13 +3552,13 @@ const mule = {
         const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
         const containers = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER);
         const storages = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_STORAGE);
-        const containersNeedingFilling = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
-        const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
-        const containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
+        const containersNeedingFilling = containers.filter(s => (s.pos.findInRange(FIND_SOURCES, 3).length === 0));
+        const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.2);
+        const containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) != 0 && s.pos.findInRange(FIND_SOURCES, 3).length > 0));
         const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
         const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
         const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
-        const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
+        const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.2);
         const closestTowerNeedingFilling = c.pos.findClosestByPath(towersNeedingFilling);
         const closestContainerProvider = c.pos.findClosestByPath(containerProviders);
         const closestContainerNeedingFilling = c.pos.findClosestByPath(containersNeedingFilling);
@@ -3621,6 +3643,7 @@ const mule = {
 
 const upgrader = {
     run(c) {
+        var _a;
         let task = getTask(c);
         let target = getTarget(c);
         c.pos.findClosestByPath(FIND_MY_SPAWNS);
@@ -3633,13 +3656,13 @@ const upgrader = {
         const storages = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_STORAGE);
         const containersNeedingFilling = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
         const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
-        const containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
-        const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
+        const containerProviders = (_a = c.room.controller) === null || _a === void 0 ? void 0 : _a.pos.findClosestByPath(containers);
+        const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.4);
         const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
         const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
         const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
         c.pos.findClosestByPath(towersNeedingFilling);
-        const closestContainerProvider = c.pos.findClosestByPath(containerProviders);
+        const closestContainerProvider = containerProviders;
         c.pos.findClosestByPath(containersNeedingFilling);
         const closestStorageProvider = c.pos.findClosestByPath(storageProviders);
         c.pos.findClosestByPath(storageNeedingFilling);
@@ -3816,8 +3839,9 @@ function getRoomSpawnPlan(r) {
             break;
         }
         case "EARLY": {
+            const roomSourcesCount = r.find(FIND_SOURCES).length;
             plan = {
-                harvester: { desired: 3, minEnergy: 300, body: bodyPlan.harvester },
+                harvester: { desired: roomSourcesCount, minEnergy: 300, body: bodyPlan.harvester },
                 mule: { desired: 2, minEnergy: 300, body: bodyPlan.mule },
                 builder: { desired: (r.find(FIND_CONSTRUCTION_SITES).length > 0) ? 3 : 1, minEnergy: 250, body: bodyPlan.builder },
                 upgrader: { desired: 2, body: bodyPlan.upgrader }
@@ -3846,23 +3870,31 @@ function getRoomSpawnPlan(r) {
     return plan;
 }
 
-// Count Creep
-function getRoleCounts() {
-    var _a;
-    let allRoleCounts = {};
-    for (const roomName in Game.rooms) {
-        const r = Game.rooms[roomName];
-        const counts = {};
-        for (const c in r.find(FIND_MY_CREEPS)) {
-            const creep = Game.creeps[c];
-            const role = creep.memory.role; // Pipe means it can be either Type, union Type
-            if (role)
-                counts[role] = ((_a = counts[role]) !== null && _a !== void 0 ? _a : 0) + 1;
+const tower = {
+    run(t) {
+        // attack, destroy, heal, repair
+        const enemyCreeps = t.room.find(FIND_HOSTILE_CREEPS);
+        const closestEnemyCreep = t.pos.findClosestByPath(enemyCreeps);
+        const hurtFriendlyCreeps = t.room.find(FIND_MY_CREEPS).filter(c => c.hits < c.hitsMax);
+        const closestHurtFriendlyCreep = t.pos.findClosestByPath(hurtFriendlyCreeps);
+        const friendlyBuildingsToRepair = t.room.find(FIND_MY_STRUCTURES).filter(s => s.hits < s.hitsMax);
+        const neutralBuildingToRepair = t.room.find(FIND_STRUCTURES).filter(s => s.hits < s.hitsMax);
+        const closestFriendlyBuildingToRepair = t.pos.findClosestByPath(friendlyBuildingsToRepair);
+        const closestNeutralBuildingToRepair = t.pos.findClosestByPath(neutralBuildingToRepair);
+        if (closestEnemyCreep) {
+            t.attack(closestEnemyCreep);
         }
-        allRoleCounts[roomName] = counts;
+        if (closestHurtFriendlyCreep) {
+            t.heal(closestHurtFriendlyCreep);
+        }
+        if (closestFriendlyBuildingToRepair) {
+            t.repair(closestFriendlyBuildingToRepair);
+        }
+        if (closestNeutralBuildingToRepair) {
+            t.repair(closestNeutralBuildingToRepair);
+        }
     }
-    return allRoleCounts;
-}
+};
 
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
@@ -3916,6 +3948,11 @@ const loop = ErrorMapper.wrapLoop(() => {
                     mule.run(c);
                 }
             }
+        }
+        // tower
+        const towers = r.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
+        for (let t of towers) {
+            tower.run(t);
         }
     }
     // Assign work t)

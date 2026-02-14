@@ -21,8 +21,9 @@ export function getRoomSpawnPlan(r: Room) {
       break
     }
     case "EARLY": {
+      const roomSourcesCount: number = r.find(FIND_SOURCES).length
       plan = {
-        harvester: { desired: 3, minEnergy: 300, body: bodyPlan.harvester },
+        harvester: { desired: roomSourcesCount, minEnergy: 300, body: bodyPlan.harvester },
         mule: { desired: 2, minEnergy: 300, body: bodyPlan.mule },
         builder: { desired: (r.find(FIND_CONSTRUCTION_SITES).length > 0) ? 3 : 1, minEnergy: 250, body: bodyPlan.builder },
         upgrader: { desired: 2, body: bodyPlan.upgrader }

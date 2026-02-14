@@ -24,6 +24,22 @@ if (!dest) {
   throw new Error("Invalid upload destination");
 }
 
+function screepsSourcemapModule() {
+  return {
+    name: "screeps-sourcemap-module",
+    generateBundle(_opts, bundle) {
+      for (const fileName of Object.keys(bundle)) {
+        if (!fileName.endsWith(".map")) continue;
+
+        const asset = bundle[fileName];
+        if (asset.type !== "asset") continue;
+
+        asset.source = "module.exports = " + asset.source.toString();
+      }
+    },
+  };
+}
+
 export default {
   input: "src/main.ts",
   output: { file: "dist/main.js", format: "cjs", sourcemap: true },
@@ -33,5 +49,6 @@ export default {
     commonjs(),
     typescript({ tsconfig: tsconfigPath }),
     screeps({ config: cfg, dryRun: cfg == null }),
+    screepsSourcemapModule()
   ],
 };
