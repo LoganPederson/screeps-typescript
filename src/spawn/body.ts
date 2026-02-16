@@ -12,6 +12,7 @@ const costs: Partial<Record<BodyPartConstant, number>> = {
   tough: 10
 }
 
+
 function buildEfficientMiner(r: Room): BodyPlan {
   const eAvail = r.energyAvailable
   let baseCost = 200
@@ -69,7 +70,8 @@ export function getBodyPlan(r: Room) {
         harvester: hasContainer ? buildEfficientMiner(r) : { work: 1, move: 1, carry: 1 },
         mule: { work: 1, move: 1, carry: 1 },
         builder: { work: 1, move: 1, carry: 1 },
-        upgrader: { work: 1, move: 1, carry: 1 }
+        upgrader: { work: 1, move: 1, carry: 1 },
+        miner: { work: 1, move: 1, carry: 1 }
       }
       break
     }
@@ -78,7 +80,9 @@ export function getBodyPlan(r: Room) {
         harvester: buildEfficientMiner(r),
         mule: buildEfficientMule(r),
         builder: buildEfficientBuilder(r),
-        upgrader: buildEfficientMiner(r)
+        upgrader: buildEfficientMiner(r),
+        miner: { work: 7, move: 1, carry: 1 }
+
       }
       break
     }
@@ -87,7 +91,9 @@ export function getBodyPlan(r: Room) {
         harvester: { work: 1, move: 1, carry: 1 },
         mule: { work: 1, move: 1, carry: 1 },
         builder: { work: 1, move: 1, carry: 1 },
-        upgrader: { work: 1, move: 1, carry: 1 }
+        upgrader: { work: 1, move: 1, carry: 1 },
+        miner: { work: 7, move: 1, carry: 1 }
+
       }
       break
     }
@@ -96,7 +102,9 @@ export function getBodyPlan(r: Room) {
         harvester: { work: 1, move: 1, carry: 1 },
         mule: { work: 1, move: 1, carry: 1 },
         builder: { work: 1, move: 1, carry: 1 },
-        upgrader: { work: 1, move: 1, carry: 1 }
+        upgrader: { work: 1, move: 1, carry: 1 },
+        miner: { work: 7, move: 1, carry: 1 }
+
       }
       break
     }

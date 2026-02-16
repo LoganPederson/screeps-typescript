@@ -18,7 +18,10 @@ export const mule = {
     const storages: StructureStorage[] = c.room.find(FIND_STRUCTURES).filter((s): s is StructureStorage => s.structureType === STRUCTURE_STORAGE)
     const containersNeedingFilling = containers.filter(s => (s.pos.findInRange(FIND_SOURCES, 3).length === 0))
     const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.2)
-    const containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) != 0 && s.pos.findInRange(FIND_SOURCES, 3).length > 0))
+    let containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) > c.store.getCapacity(RESOURCE_ENERGY) && s.pos.findInRange(FIND_SOURCES, 3).length > 0))
+    if (containerProviders.length === 0) {
+      containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) > 0 && s.pos.findInRange(FIND_SOURCES, 3).length > 0))
+    }
     const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8)
     const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0))
     const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0))
@@ -47,10 +50,15 @@ export const mule = {
           }
         }
         else {
+          let t = target as AnyStoreStructure
           if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
             task = "work"
             target = null
             setTask(c, task)
+            setTarget(c, target)
+          }
+          else if ((t.store.getUsedCapacity(RESOURCE_ENERGY) < c.store.getCapacity(RESOURCE_ENERGY))) {
+            target = null
             setTarget(c, target)
           }
           else if (c.withdraw(target as AnyStoreStructure, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {

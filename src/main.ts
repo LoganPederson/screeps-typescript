@@ -95,6 +95,9 @@ export const loop = ErrorMapper.wrapLoop(() => {
         else if (c.memory.role === "mule") {
           mule.run(c)
         }
+        else if (c.memory.role === "miner") {
+          miner.run(c)
+        }
       }
     }
     // tower
