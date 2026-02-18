@@ -10,6 +10,7 @@ import { getBodyPlan } from "spawn/body";
 import { receiveMessageOnPort } from "worker_threads";
 import { each } from "lodash";
 import { tower } from "roles/tower";
+import { claimer } from "roles/claimer";
 
 declare global {
   /*
@@ -67,9 +68,12 @@ export const loop = ErrorMapper.wrapLoop(() => {
     const plan = getRoomSpawnPlan(r)
     const spawn = r.find(FIND_MY_SPAWNS)[0]
     const counts = allRoleCounts[r.name] ?? {}
+    console.log(`Room: ${r} has ${r.energyAvailable} energy available`)
 
     // spawn
     for (const [roleName, rolePlan] of Object.entries(plan) as [RoleName, RolePlan][]) {
+      if (!spawn) { break }
+      if (roleName === "miner") { console.log(rolePlan.desired) }
       if ((counts[roleName] ?? 0) < rolePlan.desired && !spawn.spawning && (spawn.store.getUsedCapacity(RESOURCE_ENERGY) > rolePlan.desired)) {
         // spawn creep matching plan
         let builtBody: BodyPartConstant[] = []
@@ -98,8 +102,23 @@ export const loop = ErrorMapper.wrapLoop(() => {
         else if (c.memory.role === "miner") {
           miner.run(c)
         }
+        else if (c.memory.role === "claimer") {
+          claimer.run(c)
+        }
       }
     }
+
+
+    // Emergency make everyone a harvester
+    // if (true) {
+    //   for (let c of r.find(FIND_MY_CREEPS)) {
+    //     c.memory.role = "harvester"
+    //     c.memory.task = "harvest"
+    //     delete c.memory.targetID
+    //     delete c.memory.targetType
+    //     console.log("nuclear option acting")
+    //   }
+    // }
     // tower
     const towers: StructureTower[] = r.find(FIND_MY_STRUCTURES).filter((s): s is StructureTower => s.structureType === STRUCTURE_TOWER)
     for (let t of towers) {

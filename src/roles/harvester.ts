@@ -22,11 +22,15 @@ export const harvester = {
 
     function findWorkTarget(c: Creep) {
       const closestContainer: StructureContainer | null = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter((s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER))
+      const closestEmptyExtension: StructureExtension | null = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter((s): s is StructureExtension => s.structureType === STRUCTURE_EXTENSION && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0))
       if (closestContainer && ((roleCounts[c.room.name]?.mule ?? 0) > 0)) {
         setTarget(c, closestContainer, "container")
       }
       else if (spawn && spawn.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
         setTarget(c, spawn, "spawn")
+      }
+      else if (closestEmptyExtension) {
+        setTarget(c, closestEmptyExtension, "extension")
       }
       else {
         let controller = c.room.controller
@@ -127,7 +131,7 @@ export const harvester = {
         }
       }
       for (let src of sources) {
-        if ((assigned[src.id] ?? 0) < 1) {
+        if ((assigned[src.id] ?? 0) < 5) {
           c.memory.sourceID = src.id
           break
         }

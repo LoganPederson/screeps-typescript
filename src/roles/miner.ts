@@ -99,7 +99,7 @@ export const miner = {
       const assigned: Partial<Record<Id<Source>, number>> = {}
       for (let creep of c.room.find(FIND_MY_CREEPS)) {
         let sid = creep.memory.sourceID as Id<Source>
-        if (sid) {
+        if (sid && creep.memory.role === "miner") {
           assigned[sid] = (assigned[sid] ?? 0) + 1
         }
       }

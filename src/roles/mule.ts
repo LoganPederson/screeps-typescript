@@ -16,7 +16,7 @@ export const mule = {
     const towers: StructureTower[] = c.room.find(FIND_MY_STRUCTURES).filter((s): s is StructureTower => s.structureType === STRUCTURE_TOWER)
     const containers: StructureContainer[] = c.room.find(FIND_STRUCTURES).filter((s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER)
     const storages: StructureStorage[] = c.room.find(FIND_STRUCTURES).filter((s): s is StructureStorage => s.structureType === STRUCTURE_STORAGE)
-    const containersNeedingFilling = containers.filter(s => (s.pos.findInRange(FIND_SOURCES, 3).length === 0))
+    const containersNeedingFilling = containers.filter(s => (s.pos.findInRange(FIND_SOURCES, 3).length === 0) && s.store.getFreeCapacity(RESOURCE_ENERGY) != 0)
     const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.2)
     let containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) > c.store.getCapacity(RESOURCE_ENERGY) && s.pos.findInRange(FIND_SOURCES, 3).length > 0))
     if (containerProviders.length === 0) {
@@ -25,7 +25,7 @@ export const mule = {
     const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8)
     const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0))
     const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0))
-    const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.2)
+    const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.8)
     const closestTowerNeedingFilling = c.pos.findClosestByPath(towersNeedingFilling)
     const closestContainerProvider = c.pos.findClosestByPath(containerProviders)
     const closestContainerNeedingFilling = c.pos.findClosestByPath(containersNeedingFilling)
@@ -45,8 +45,16 @@ export const mule = {
           if (closestContainerProvider) {
             setTarget(c, closestContainerProvider, "container")
           }
-          else {
+          else if (closestContainer) {
             setTarget(c, closestContainer)
+          }
+          else {
+            // If no valid targets, emergency fallback to harvester mode -- no work parts though?
+            // c.memory.role = "harvester"
+            // delete c.memory.task
+            // delete c.memory.targetID
+            // delete c.memory.targetType
+            c.say("No valid pickup targets!")
           }
         }
         else {
@@ -106,6 +114,17 @@ export const mule = {
       }
       else if ((target as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
         setTarget(c, null)
+      }
+      // prevent storage from becoming taret for too long and killing economy
+      else if (c.memory.targetType === "storage") {
+        const containersBelowHalf = containersNeedingFilling.filter((s) => s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY) <= 0.5)
+        if (containersBelowHalf.length > 0 || spawnsAndExtensionsNeedingFilling.length > 0) {
+          delete c.memory.targetID
+          delete c.memory.targetType
+        }
+        else if (c.transfer(target as AnyStoreStructure, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          c.moveTo(target as AnyStoreStructure)
+        }
       }
       else if (c.transfer(target as AnyStoreStructure, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         c.moveTo(target as AnyStoreStructure)

@@ -12,12 +12,17 @@ const costs: Partial<Record<BodyPartConstant, number>> = {
   tough: 10
 }
 
+const optimalMuleBodyParts = 12 // Move,Carry * 6
+const optimalMinerBodyPart = 8// Move, Carry, Work*6
+const optimalBuilderBodyParts = 8 // Move*2, Carry, Work,
+const optimalHarvesterBodyParts = 4 // Movex2, carry, work
+
 
 function buildEfficientMiner(r: Room): BodyPlan {
   const eAvail = r.energyAvailable
   let baseCost = 200
   let body: BodyPartConstant[] = [CARRY, MOVE, WORK]
-  let workToAdd: number = Math.floor((eAvail - baseCost) / BODYPART_COST[WORK])
+  let workToAdd: number = Math.min(Math.floor((eAvail - baseCost) / BODYPART_COST[WORK]), optimalMinerBodyPart - 3) // stop at optimal size
   for (let i = 0; i < workToAdd; i++) {
     body.push(WORK)
   }
@@ -33,7 +38,7 @@ function buildEfficientMule(r: Room): BodyPlan {
   let baseCost = 250
   let body: BodyPartConstant[] = [CARRY, MOVE, WORK, MOVE]
   let carryToAdd: number = Math.floor((eAvail - baseCost) / BODYPART_COST[CARRY])
-  for (let i = 0; i < (Math.floor(carryToAdd / 2)); i++) {
+  for (let i = 0; i < Math.min((Math.floor(carryToAdd / 2)), (optimalMuleBodyParts - 4) / 2); i++) {
     body.push(CARRY)
     body.push(MOVE)
   }
@@ -47,7 +52,7 @@ function buildEfficientBuilder(r: Room): BodyPlan {
   const eAvail = r.energyAvailable
   let baseCost = 250
   let body: BodyPartConstant[] = []
-  for (let i = 0; i < (Math.floor(eAvail / 250)); i++) {
+  for (let i = 0; i < Math.min((Math.floor(eAvail / 250)), optimalBuilderBodyParts / 4); i++) {
     body.push(CARRY)
     body.push(MOVE)
     body.push(WORK)
@@ -71,28 +76,31 @@ export function getBodyPlan(r: Room) {
         mule: { work: 1, move: 1, carry: 1 },
         builder: { work: 1, move: 1, carry: 1 },
         upgrader: { work: 1, move: 1, carry: 1 },
-        miner: { work: 1, move: 1, carry: 1 }
+        miner: { work: 1, move: 1, carry: 1 },
+        claimer: { work: 1, carry: 1, move: 3, claim: 1 }
       }
       break
     }
     case "EARLY": {
       plan = {
-        harvester: buildEfficientMiner(r),
+        harvester: { work: 1, move: 2, carry: 1 },
         mule: buildEfficientMule(r),
         builder: buildEfficientBuilder(r),
         upgrader: buildEfficientMiner(r),
-        miner: { work: 7, move: 1, carry: 1 }
+        miner: buildEfficientMiner(r),
+        claimer: { work: 1, carry: 1, move: 3, claim: 1 }
 
       }
       break
     }
     case "MID": {
       plan = {
-        harvester: { work: 1, move: 1, carry: 1 },
-        mule: { work: 1, move: 1, carry: 1 },
-        builder: { work: 1, move: 1, carry: 1 },
-        upgrader: { work: 1, move: 1, carry: 1 },
-        miner: { work: 7, move: 1, carry: 1 }
+        harvester: { work: 1, move: 2, carry: 1 },
+        mule: buildEfficientMule(r),
+        builder: buildEfficientBuilder(r),
+        upgrader: buildEfficientMiner(r),
+        miner: buildEfficientMiner(r),
+        claimer: { work: 1, carry: 1, move: 3, claim: 1 }
 
       }
       break
@@ -103,7 +111,8 @@ export function getBodyPlan(r: Room) {
         mule: { work: 1, move: 1, carry: 1 },
         builder: { work: 1, move: 1, carry: 1 },
         upgrader: { work: 1, move: 1, carry: 1 },
-        miner: { work: 7, move: 1, carry: 1 }
+        miner: { work: 7, move: 1, carry: 1 },
+        claimer: { work: 1, carry: 1, move: 3, claim: 1 }
 
       }
       break

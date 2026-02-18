@@ -1,6 +1,6 @@
 export type BodyPlan = Partial<Record<BodyPartConstant, number>>
 export type RoleBodyPlan = Record<RoleName, BodyPlan>
-export type RoleName = "harvester" | "mule" | "builder" | "upgrader" | "miner"
+export type RoleName = "harvester" | "mule" | "builder" | "upgrader" | "miner" | "claimer"
 export type RoleModule = { run: (c: Creep) => void }
 export type RolePlan = {
   desired: number,

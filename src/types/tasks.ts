@@ -1,1 +1,1 @@
-export type TaskName = Partial<"harvest" | "work" | "upgrade" | "refillEnergy">
+export type TaskName = Partial<"harvest" | "work" | "upgrade" | "refillEnergy" | "claim" | "travel" | "retreat" | "harass">

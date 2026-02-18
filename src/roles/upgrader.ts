@@ -15,10 +15,11 @@ export const upgrader = {
     const extensions: StructureExtension[] = c.room.find(FIND_MY_STRUCTURES).filter((s): s is StructureExtension => s.structureType === STRUCTURE_EXTENSION)
     const towers: StructureTower[] = c.room.find(FIND_MY_STRUCTURES).filter((s): s is StructureTower => s.structureType === STRUCTURE_TOWER)
     const containers: StructureContainer[] = c.room.find(FIND_STRUCTURES).filter((s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER)
+    const containersNearController: StructureContainer[] = c.room.find(FIND_STRUCTURES).filter((s): s is StructureContainer => s.pos.getRangeTo(c.room.controller?.pos.x ?? 1000, c.room.controller?.pos.y ?? 1000) <= 6)
     const storages: StructureStorage[] = c.room.find(FIND_STRUCTURES).filter((s): s is StructureStorage => s.structureType === STRUCTURE_STORAGE)
     const containersNeedingFilling = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4)
     const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4)
-    const containerProviders = c.room.controller?.pos.findClosestByPath(containers)
+    const containerProviders = c.room.controller?.pos.findClosestByPath(containersNearController)
     const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.4)
     const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0))
     const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0))
@@ -36,11 +37,11 @@ export const upgrader = {
       // set target
       if (true) {
         if (!target) {
+          if (closestContainerProvider) {
+            setTarget(c, closestContainerProvider, "container")
+          }
           if (closestStorageProvider) {
             setTarget(c, closestStorageProvider, "storage")
-          }
-          else if (closestContainerProvider) {
-            setTarget(c, closestContainerProvider, "container")
           }
           else if (closestContainer) {
             setTarget(c, closestContainer, "container")

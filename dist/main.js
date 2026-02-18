@@ -3286,11 +3286,15 @@ const harvester = {
         function findWorkTarget(c) {
             var _a, _b;
             const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER));
+            const closestEmptyExtension = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION && s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
             if (closestContainer && (((_b = (_a = roleCounts[c.room.name]) === null || _a === void 0 ? void 0 : _a.mule) !== null && _b !== void 0 ? _b : 0) > 0)) {
                 setTarget(c, closestContainer, "container");
             }
             else if (spawn && spawn.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
                 setTarget(c, spawn, "spawn");
+            }
+            else if (closestEmptyExtension) {
+                setTarget(c, closestEmptyExtension, "extension");
             }
             else {
                 let controller = c.room.controller;
@@ -3389,7 +3393,7 @@ const harvester = {
                 }
             }
             for (let src of sources) {
-                if (((_b = assigned[src.id]) !== null && _b !== void 0 ? _b : 0) < 1) {
+                if (((_b = assigned[src.id]) !== null && _b !== void 0 ? _b : 0) < 5) {
                     c.memory.sourceID = src.id;
                     break;
                 }
@@ -3412,7 +3416,7 @@ const builder = {
         let task = getTask(c);
         let target = getTarget(c);
         const spawn = c.pos.findClosestByPath(FIND_MY_SPAWNS);
-        c.pos.findClosestByPath(FIND_SOURCES);
+        const closestSource = c.pos.findClosestByPath(FIND_SOURCES);
         const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER));
         const spawns = c.room.find(FIND_MY_SPAWNS);
         const extensions = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
@@ -3449,6 +3453,9 @@ const builder = {
                     else if (closestContainer) {
                         setTarget(c, closestContainer, "container");
                     }
+                    else if (closestSource) {
+                        setTarget(c, closestSource, "source");
+                    }
                 }
                 else {
                     if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
@@ -3456,6 +3463,11 @@ const builder = {
                         target = null;
                         setTask(c, task);
                         setTarget(c, target);
+                    }
+                    if (c.memory.targetType === "source") {
+                        if (c.harvest(target) === ERR_NOT_IN_RANGE) {
+                            c.moveTo(target);
+                        }
                     }
                     else if (c.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
                         c.moveTo(target);
@@ -3630,7 +3642,7 @@ const miner = {
             const assigned = {};
             for (let creep of c.room.find(FIND_MY_CREEPS)) {
                 let sid = creep.memory.sourceID;
-                if (sid) {
+                if (sid && creep.memory.role === "miner") {
                     assigned[sid] = ((_a = assigned[sid]) !== null && _a !== void 0 ? _a : 0) + 1;
                 }
             }
@@ -3665,7 +3677,7 @@ const mule = {
         const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
         const containers = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER);
         const storages = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_STORAGE);
-        const containersNeedingFilling = containers.filter(s => (s.pos.findInRange(FIND_SOURCES, 3).length === 0));
+        const containersNeedingFilling = containers.filter(s => (s.pos.findInRange(FIND_SOURCES, 3).length === 0) && s.store.getFreeCapacity(RESOURCE_ENERGY) != 0);
         const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.2);
         let containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) > c.store.getCapacity(RESOURCE_ENERGY) && s.pos.findInRange(FIND_SOURCES, 3).length > 0));
         if (containerProviders.length === 0) {
@@ -3674,7 +3686,7 @@ const mule = {
         const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
         const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
         const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
-        const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.2);
+        const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.8);
         const closestTowerNeedingFilling = c.pos.findClosestByPath(towersNeedingFilling);
         const closestContainerProvider = c.pos.findClosestByPath(containerProviders);
         const closestContainerNeedingFilling = c.pos.findClosestByPath(containersNeedingFilling);
@@ -3695,8 +3707,16 @@ const mule = {
                     if (closestContainerProvider) {
                         setTarget(c, closestContainerProvider, "container");
                     }
-                    else {
+                    else if (closestContainer) {
                         setTarget(c, closestContainer);
+                    }
+                    else {
+                        // If no valid targets, emergency fallback to harvester mode -- no work parts though?
+                        // c.memory.role = "harvester"
+                        // delete c.memory.task
+                        // delete c.memory.targetID
+                        // delete c.memory.targetType
+                        c.say("No valid pickup targets!");
                     }
                 }
                 else {
@@ -3755,6 +3775,17 @@ const mule = {
             else if (target.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
                 setTarget(c, null);
             }
+            // prevent storage from becoming taret for too long and killing economy
+            else if (c.memory.targetType === "storage") {
+                const containersBelowHalf = containersNeedingFilling.filter((s) => s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY) <= 0.5);
+                if (containersBelowHalf.length > 0 || spawnsAndExtensionsNeedingFilling.length > 0) {
+                    delete c.memory.targetID;
+                    delete c.memory.targetType;
+                }
+                else if (c.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                    c.moveTo(target);
+                }
+            }
             else if (c.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
                 c.moveTo(target);
             }
@@ -3774,10 +3805,11 @@ const upgrader = {
         const extensions = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
         const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
         const containers = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER);
+        const containersNearController = c.room.find(FIND_STRUCTURES).filter((s) => { var _a, _b, _c, _d; return s.pos.getRangeTo((_b = (_a = c.room.controller) === null || _a === void 0 ? void 0 : _a.pos.x) !== null && _b !== void 0 ? _b : 1000, (_d = (_c = c.room.controller) === null || _c === void 0 ? void 0 : _c.pos.y) !== null && _d !== void 0 ? _d : 1000) <= 6; });
         const storages = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_STORAGE);
         const containersNeedingFilling = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
         const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.4);
-        const containerProviders = (_a = c.room.controller) === null || _a === void 0 ? void 0 : _a.pos.findClosestByPath(containers);
+        const containerProviders = (_a = c.room.controller) === null || _a === void 0 ? void 0 : _a.pos.findClosestByPath(containersNearController);
         const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.4);
         const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
         const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
@@ -3796,11 +3828,11 @@ const upgrader = {
             // set target
             {
                 if (!target) {
+                    if (closestContainerProvider) {
+                        setTarget(c, closestContainerProvider, "container");
+                    }
                     if (closestStorageProvider) {
                         setTarget(c, closestStorageProvider, "storage");
-                    }
-                    else if (closestContainerProvider) {
-                        setTarget(c, closestContainerProvider, "container");
                     }
                     else if (closestContainer) {
                         setTarget(c, closestContainer, "container");
@@ -3852,12 +3884,15 @@ function getGamePhase(r) {
         return "LATE";
 }
 
+const optimalMuleBodyParts = 12; // Move,Carry * 6
+const optimalMinerBodyPart = 8; // Move, Carry, Work*6
+const optimalBuilderBodyParts = 8; // Move*2, Carry, Work,
 function buildEfficientMiner(r) {
     var _a;
     const eAvail = r.energyAvailable;
     let baseCost = 200;
     let body = [CARRY, MOVE, WORK];
-    let workToAdd = Math.floor((eAvail - baseCost) / BODYPART_COST[WORK]);
+    let workToAdd = Math.min(Math.floor((eAvail - baseCost) / BODYPART_COST[WORK]), optimalMinerBodyPart - 3); // stop at optimal size
     for (let i = 0; i < workToAdd; i++) {
         body.push(WORK);
     }
@@ -3873,7 +3908,7 @@ function buildEfficientMule(r) {
     let baseCost = 250;
     let body = [CARRY, MOVE, WORK, MOVE];
     let carryToAdd = Math.floor((eAvail - baseCost) / BODYPART_COST[CARRY]);
-    for (let i = 0; i < (Math.floor(carryToAdd / 2)); i++) {
+    for (let i = 0; i < Math.min((Math.floor(carryToAdd / 2)), (optimalMuleBodyParts - 4) / 2); i++) {
         body.push(CARRY);
         body.push(MOVE);
     }
@@ -3887,7 +3922,7 @@ function buildEfficientBuilder(r) {
     var _a;
     const eAvail = r.energyAvailable;
     let body = [];
-    for (let i = 0; i < (Math.floor(eAvail / 250)); i++) {
+    for (let i = 0; i < Math.min((Math.floor(eAvail / 250)), optimalBuilderBodyParts / 4); i++) {
         body.push(CARRY);
         body.push(MOVE);
         body.push(WORK);
@@ -3910,27 +3945,30 @@ function getBodyPlan(r) {
                 mule: { work: 1, move: 1, carry: 1 },
                 builder: { work: 1, move: 1, carry: 1 },
                 upgrader: { work: 1, move: 1, carry: 1 },
-                miner: { work: 1, move: 1, carry: 1 }
+                miner: { work: 1, move: 1, carry: 1 },
+                claimer: { work: 1, carry: 1, move: 3, claim: 1 }
             };
             break;
         }
         case "EARLY": {
             plan = {
-                harvester: buildEfficientMiner(r),
+                harvester: { work: 1, move: 2, carry: 1 },
                 mule: buildEfficientMule(r),
                 builder: buildEfficientBuilder(r),
                 upgrader: buildEfficientMiner(r),
-                miner: { work: 7, move: 1, carry: 1 }
+                miner: buildEfficientMiner(r),
+                claimer: { work: 1, carry: 1, move: 3, claim: 1 }
             };
             break;
         }
         case "MID": {
             plan = {
-                harvester: { work: 1, move: 1, carry: 1 },
-                mule: { work: 1, move: 1, carry: 1 },
-                builder: { work: 1, move: 1, carry: 1 },
-                upgrader: { work: 1, move: 1, carry: 1 },
-                miner: { work: 7, move: 1, carry: 1 }
+                harvester: { work: 1, move: 2, carry: 1 },
+                mule: buildEfficientMule(r),
+                builder: buildEfficientBuilder(r),
+                upgrader: buildEfficientMiner(r),
+                miner: buildEfficientMiner(r),
+                claimer: { work: 1, carry: 1, move: 3, claim: 1 }
             };
             break;
         }
@@ -3940,7 +3978,8 @@ function getBodyPlan(r) {
                 mule: { work: 1, move: 1, carry: 1 },
                 builder: { work: 1, move: 1, carry: 1 },
                 upgrader: { work: 1, move: 1, carry: 1 },
-                miner: { work: 7, move: 1, carry: 1 }
+                miner: { work: 7, move: 1, carry: 1 },
+                claimer: { work: 1, carry: 1, move: 3, claim: 1 }
             };
             break;
         }
@@ -3949,10 +3988,13 @@ function getBodyPlan(r) {
 }
 
 function getRoomSpawnPlan(r) {
+    var _a, _b;
     const sites = r.find(FIND_CONSTRUCTION_SITES).length;
     !!r.storage;
     const bodyPlan = getBodyPlan(r);
     const counts = getRoleCounts()[r.name];
+    const expandFlagsAndCreep = (Game.flags["expand"] && Object.values(Game.creeps).filter(c => c.memory.role === "claimer").length === 0) ? true : false;
+    const expandFlagExists = Game.flags["expand"];
     let plan;
     switch (getGamePhase(r)) {
         case "BOOT": {
@@ -3961,7 +4003,8 @@ function getRoomSpawnPlan(r) {
                 mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
                 builder: { desired: 1, minEnergy: 100, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader },
-                miner: { desired: 2, body: bodyPlan.miner }
+                miner: { desired: 2, body: bodyPlan.miner },
+                claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
             };
             break;
         }
@@ -3969,38 +4012,48 @@ function getRoomSpawnPlan(r) {
             const roomSourcesCount = r.find(FIND_SOURCES).length;
             let harvesterDesired;
             if ((counts === null || counts === void 0 ? void 0 : counts.mule) === 0 || (counts === null || counts === void 0 ? void 0 : counts.miner) === 0) {
-                harvesterDesired = 2;
+                harvesterDesired = 3;
             }
             else {
                 harvesterDesired = 0;
             }
-            let mulesDesired = Math.max(r.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER).length, 2);
+            let minerDesired;
+            if ((counts === null || counts === void 0 ? void 0 : counts.mule) === 0 || r.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER).length === 0) {
+                minerDesired = 0;
+            }
+            else {
+                minerDesired = roomSourcesCount;
+            }
+            let mulesDesired = Math.max(r.find(FIND_STRUCTURES).filter(s => s.structureType === STRUCTURE_CONTAINER).length, 1);
             plan = {
                 harvester: { desired: harvesterDesired, minEnergy: 300, body: { work: 1, carry: 1, move: 2 } },
+                miner: { desired: minerDesired, body: bodyPlan.miner },
                 mule: { desired: mulesDesired, minEnergy: 300, body: bodyPlan.mule },
-                builder: { desired: (r.find(FIND_CONSTRUCTION_SITES).length > 0) ? 3 : 1, minEnergy: 250, body: bodyPlan.builder },
-                upgrader: { desired: 2, body: bodyPlan.upgrader },
-                miner: { desired: roomSourcesCount, body: bodyPlan.miner }
+                builder: { desired: (r.find(FIND_CONSTRUCTION_SITES).length > 0) ? 2 : 0, minEnergy: ((_a = counts === null || counts === void 0 ? void 0 : counts.builder) !== null && _a !== void 0 ? _a : 0) > 0 ? 750 : 250, body: bodyPlan.builder },
+                upgrader: { desired: 1, body: bodyPlan.upgrader, minEnergy: ((_b = counts === null || counts === void 0 ? void 0 : counts.upgrader) !== null && _b !== void 0 ? _b : 0) > 0 ? 600 : 300, },
+                claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
             };
             break;
         }
         case "MID": {
             plan = {
                 harvester: { desired: 5, body: bodyPlan.harvester },
+                miner: { desired: 2, body: bodyPlan.miner },
                 mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
                 builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader },
-                miner: { desired: 2, body: bodyPlan.miner }
+                claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
             };
             break;
         }
         case "LATE": {
             plan = {
                 harvester: { desired: 5, body: bodyPlan.harvester },
+                miner: { desired: 2, body: bodyPlan.miner },
                 mule: { desired: 1, minEnergy: 100, body: bodyPlan.mule },
                 builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader },
-                miner: { desired: 2, body: bodyPlan.miner }
+                claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
             };
             break;
         }
@@ -4034,6 +4087,154 @@ const tower = {
     }
 };
 
+const claimer = {
+    /*
+     
+       The claimer role is responsible for starting a new colony.
+       Mobile, Capable, a Hero unit of sorts*?
+       
+  
+       Tasks:
+       RefillEnergy -- copy mule logic
+       work -- goto and claim
+       ?
+    */
+    run(c) {
+        var _a, _b;
+        const expansionFlag = Game.flags["expand"];
+        c.room;
+        let task = getTask(c);
+        let target = getTarget(c);
+        c.pos.findClosestByPath(FIND_MY_SPAWNS);
+        c.pos.findClosestByPath(FIND_SOURCES);
+        const closestContainer = c.pos.findClosestByPath(c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER));
+        const spawns = c.room.find(FIND_MY_SPAWNS);
+        const extensions = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
+        const towers = c.room.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
+        const containers = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER);
+        const storages = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_STORAGE);
+        const containersNeedingFilling = containers.filter(s => (s.pos.findInRange(FIND_SOURCES, 3).length === 0) && s.store.getFreeCapacity(RESOURCE_ENERGY) != 0);
+        const storageNeedingFilling = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.2);
+        let containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) > c.store.getCapacity(RESOURCE_ENERGY) && s.pos.findInRange(FIND_SOURCES, 3).length > 0));
+        if (containerProviders.length === 0) {
+            containerProviders = containers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) > 0 && s.pos.findInRange(FIND_SOURCES, 3).length > 0));
+        }
+        const storageProviders = storages.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) >= 0.8);
+        const spawnsNeedingFilling = spawns.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        const extensionsNeedingFilling = extensions.filter(s => (s.store.getFreeCapacity(RESOURCE_ENERGY) > 0));
+        const towersNeedingFilling = towers.filter(s => (s.store.getUsedCapacity(RESOURCE_ENERGY) / s.store.getCapacity(RESOURCE_ENERGY)) <= 0.8);
+        c.pos.findClosestByPath(towersNeedingFilling);
+        const closestContainerProvider = c.pos.findClosestByPath(containerProviders);
+        c.pos.findClosestByPath(containersNeedingFilling);
+        const closestStorageProvider = c.pos.findClosestByPath(storageProviders);
+        c.pos.findClosestByPath(storageNeedingFilling);
+        const spawnsAndExtensionsNeedingFilling = [...extensionsNeedingFilling, ...spawnsNeedingFilling];
+        c.pos.findClosestByPath(spawnsAndExtensionsNeedingFilling);
+        function nudgeOffEdge(c) {
+            if (c.pos.x === 0) {
+                c.move(RIGHT);
+                return true;
+            }
+            if (c.pos.x === 49) {
+                c.move(LEFT);
+                return true;
+            }
+            if (c.pos.y === 0) {
+                c.move(BOTTOM);
+                return true;
+            }
+            if (c.pos.y === 49) {
+                c.move(TOP);
+                return true;
+            }
+            return false;
+        }
+        if (!task) {
+            c.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? setTask(c, "refillEnergy") : setTask(c, "work");
+        }
+        if (task === "refillEnergy") {
+            // set target
+            if (!target) {
+                if (closestStorageProvider) {
+                    setTarget(c, closestStorageProvider, "storage");
+                }
+                if (closestContainerProvider) {
+                    setTarget(c, closestContainerProvider, "container");
+                }
+                else if (closestContainer) {
+                    setTarget(c, closestContainer);
+                }
+                else {
+                    // If no valid targets, emergency fallback to harvester mode -- no work parts though?
+                    // c.memory.role = "harvester"
+                    // delete c.memory.task
+                    // delete c.memory.targetID
+                    // delete c.memory.targetType
+                    c.say("No valid pickup targets!");
+                }
+            }
+            else {
+                let t = target;
+                if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+                    task = "work";
+                    target = null;
+                    setTask(c, task);
+                    setTarget(c, target);
+                }
+                else if ((t.store.getUsedCapacity(RESOURCE_ENERGY) < c.store.getCapacity(RESOURCE_ENERGY))) {
+                    target = null;
+                    setTarget(c, target);
+                }
+                else if (c.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                    c.moveTo(target);
+                }
+            }
+        }
+        if (task === "work") {
+            if (!target) {
+                if (c.room.name === expansionFlag.pos.roomName) {
+                    const targetController = Game.rooms[expansionFlag.pos.roomName].controller;
+                    if (targetController) {
+                        target = targetController;
+                        setTarget(c, targetController, "controller");
+                    }
+                    else {
+                        c.say("No controller!");
+                        console.log(`Creep ${c.name} has no target controller in flag room specified!`);
+                    }
+                }
+                else {
+                    if (nudgeOffEdge(c)) {
+                        console.log("nudging");
+                        return;
+                    }
+                    c.moveTo(expansionFlag);
+                }
+            }
+            if (target) {
+                if (nudgeOffEdge(c)) {
+                    return;
+                }
+                console.log(c.claimController(target));
+                if (c.claimController(target) === ERR_NOT_IN_RANGE) {
+                    c.moveTo(target);
+                }
+                else if (c.claimController(target) === ERR_INVALID_TARGET || (c.claimController(target) === ERR_GCL_NOT_ENOUGH)) {
+                    console.log('test');
+                    if (((_a = c.room.controller) === null || _a === void 0 ? void 0 : _a.owner) === ((_b = Game.rooms[0].controller) === null || _b === void 0 ? void 0 : _b.owner)) {
+                        c.memory.role = "upgrader";
+                        delete c.memory.task;
+                        delete c.memory.targetID;
+                        delete c.memory.targetType;
+                        expansionFlag.remove();
+                        Game.notify(`Claimed room ${c.room}`);
+                    }
+                }
+            }
+        }
+    }
+};
+
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
 const loop = ErrorMapper.wrapLoop(() => {
@@ -4054,8 +4255,15 @@ const loop = ErrorMapper.wrapLoop(() => {
         const plan = getRoomSpawnPlan(r);
         const spawn = r.find(FIND_MY_SPAWNS)[0];
         const counts = (_a = allRoleCounts[r.name]) !== null && _a !== void 0 ? _a : {};
+        console.log(`Room: ${r} has ${r.energyAvailable} energy available`);
         // spawn
         for (const [roleName, rolePlan] of Object.entries(plan)) {
+            if (!spawn) {
+                break;
+            }
+            if (roleName === "miner") {
+                console.log(rolePlan.desired);
+            }
             if (((_b = counts[roleName]) !== null && _b !== void 0 ? _b : 0) < rolePlan.desired && !spawn.spawning && (spawn.store.getUsedCapacity(RESOURCE_ENERGY) > rolePlan.desired)) {
                 // spawn creep matching plan
                 let builtBody = [];
@@ -4088,8 +4296,21 @@ const loop = ErrorMapper.wrapLoop(() => {
                 else if (c.memory.role === "miner") {
                     miner.run(c);
                 }
+                else if (c.memory.role === "claimer") {
+                    claimer.run(c);
+                }
             }
         }
+        // Emergency make everyone a harvester
+        // if (true) {
+        //   for (let c of r.find(FIND_MY_CREEPS)) {
+        //     c.memory.role = "harvester"
+        //     c.memory.task = "harvest"
+        //     delete c.memory.targetID
+        //     delete c.memory.targetType
+        //     console.log("nuclear option acting")
+        //   }
+        // }
         // tower
         const towers = r.find(FIND_MY_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
         for (let t of towers) {

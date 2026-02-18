@@ -43,6 +43,9 @@ export const builder = {
           else if (closestContainer) {
             setTarget(c, closestContainer, "container")
           }
+          else if (closestSource) {
+            setTarget(c, closestSource, "source")
+          }
 
         }
         else {
@@ -51,6 +54,11 @@ export const builder = {
             target = null
             setTask(c, task)
             setTarget(c, target)
+          }
+          if (c.memory.targetType === "source") {
+            if (c.harvest(target as Source) === ERR_NOT_IN_RANGE) {
+              c.moveTo(target as Source)
+            }
           }
           else if (c.withdraw(target as AnyStoreStructure, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
             c.moveTo(target as AnyStoreStructure)
