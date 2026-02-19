@@ -12,6 +12,8 @@ export function getRoomSpawnPlan(r: Room) {
   const counts = getRoleCounts()[r.name]
   const expandFlagsAndCreep = (Game.flags["expand"] && Object.values(Game.creeps).filter(c => c.memory.role === "claimer").length === 0) ? true : false
   const expandFlagExists = Game.flags["expand"]
+  const bansheeFlagsAndCreep = (Game.flags["bansheeAttack"] && Object.values(Game.creeps).filter(c => c.memory.role === "banshee").length === 0) ? true : false
+  const bansheeFlagExists = Game.flags["bansheeAttack"]
 
   let plan: RoomPlan
   switch (getGamePhase(r)) {
@@ -23,7 +25,7 @@ export function getRoomSpawnPlan(r: Room) {
         upgrader: { desired: 1, body: bodyPlan.upgrader },
         miner: { desired: 2, body: bodyPlan.miner },
         claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
-
+        banshee: { desired: bansheeFlagExists && bansheeFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { move: 6, ranged_attack: 5 } }
       }
       break
     }
@@ -53,6 +55,7 @@ export function getRoomSpawnPlan(r: Room) {
         builder: { desired: (r.find(FIND_CONSTRUCTION_SITES).length > 0) ? 2 : 0, minEnergy: (counts?.builder ?? 0) > 0 ? 750 : 250, body: bodyPlan.builder },
         upgrader: { desired: 1, body: bodyPlan.upgrader, minEnergy: (counts?.upgrader ?? 0) > 0 ? 600 : 300, },
         claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
+        banshee: { desired: bansheeFlagExists && bansheeFlagsAndCreep ? 1 : 0, minEnergy: 1050, body: { move: 6, ranged_attack: 5 } }
       }
       break
     }
@@ -64,6 +67,7 @@ export function getRoomSpawnPlan(r: Room) {
         builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
         upgrader: { desired: 1, body: bodyPlan.upgrader },
         claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
+        banshee: { desired: bansheeFlagExists && bansheeFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { move: 6, ranged_attack: 5 } }
 
       }
       break
@@ -76,6 +80,7 @@ export function getRoomSpawnPlan(r: Room) {
         builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
         upgrader: { desired: 1, body: bodyPlan.upgrader },
         claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
+        banshee: { desired: bansheeFlagExists && bansheeFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { move: 6, ranged_attack: 5 } }
 
       }
       break

@@ -11,6 +11,7 @@ import { receiveMessageOnPort } from "worker_threads";
 import { each } from "lodash";
 import { tower } from "roles/tower";
 import { claimer } from "roles/claimer";
+import { banshee } from "roles/banshee";
 
 declare global {
   /*
@@ -34,6 +35,7 @@ declare global {
     task?: string;
     targetID?: string;
     targetType?: string;
+    targetFlagName?: string;
     sourceID?: string;
   }
 
@@ -104,6 +106,9 @@ export const loop = ErrorMapper.wrapLoop(() => {
         }
         else if (c.memory.role === "claimer") {
           claimer.run(c)
+        }
+        else if (c.memory.role === "banshee") {
+          banshee.run(c)
         }
       }
     }

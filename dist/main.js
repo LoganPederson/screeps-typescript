@@ -3239,6 +3239,11 @@ ErrorMapper.cache = {};
 const getTask = (c) => c.memory.task;
 const setTask = (c, t) => { c.memory.task = t; };
 const getTarget = (c) => {
+    var _a;
+    if (c.memory.targetType === "flag") {
+        const name = c.memory.targetFlagName;
+        return name ? (_a = Game.flags[name]) !== null && _a !== void 0 ? _a : null : null;
+    }
     const id = c.memory.targetID;
     return id ? Game.getObjectById(id) : null;
 };
@@ -3246,10 +3251,19 @@ function setTarget(c, target, type) {
     if (!target) {
         delete c.memory.targetID;
         delete c.memory.targetType;
+        delete c.memory.targetFlagName;
         return;
     }
-    c.memory.targetID = target.id;
-    c.memory.targetType = type;
+    else if (target instanceof Flag) {
+        c.memory.targetType = "flag";
+        c.memory.targetFlagName = target.name;
+        delete c.memory.targetID;
+        return;
+    }
+    else {
+        c.memory.targetID = target.id;
+        c.memory.targetType = type;
+    }
 }
 
 // Count Creep
@@ -3946,7 +3960,8 @@ function getBodyPlan(r) {
                 builder: { work: 1, move: 1, carry: 1 },
                 upgrader: { work: 1, move: 1, carry: 1 },
                 miner: { work: 1, move: 1, carry: 1 },
-                claimer: { work: 1, carry: 1, move: 3, claim: 1 }
+                claimer: { work: 1, carry: 1, move: 3, claim: 1 },
+                banshee: { work: 1, carry: 1, move: 3, claim: 1 },
             };
             break;
         }
@@ -3957,7 +3972,8 @@ function getBodyPlan(r) {
                 builder: buildEfficientBuilder(r),
                 upgrader: buildEfficientMiner(r),
                 miner: buildEfficientMiner(r),
-                claimer: { work: 1, carry: 1, move: 3, claim: 1 }
+                claimer: { work: 1, carry: 1, move: 3, claim: 1 },
+                banshee: { work: 1, carry: 1, move: 3, claim: 1 },
             };
             break;
         }
@@ -3968,7 +3984,8 @@ function getBodyPlan(r) {
                 builder: buildEfficientBuilder(r),
                 upgrader: buildEfficientMiner(r),
                 miner: buildEfficientMiner(r),
-                claimer: { work: 1, carry: 1, move: 3, claim: 1 }
+                claimer: { work: 1, carry: 1, move: 3, claim: 1 },
+                banshee: { work: 1, carry: 1, move: 3, claim: 1 },
             };
             break;
         }
@@ -3979,7 +3996,8 @@ function getBodyPlan(r) {
                 builder: { work: 1, move: 1, carry: 1 },
                 upgrader: { work: 1, move: 1, carry: 1 },
                 miner: { work: 7, move: 1, carry: 1 },
-                claimer: { work: 1, carry: 1, move: 3, claim: 1 }
+                claimer: { work: 1, carry: 1, move: 3, claim: 1 },
+                banshee: { work: 1, carry: 1, move: 3, claim: 1 },
             };
             break;
         }
@@ -3995,6 +4013,8 @@ function getRoomSpawnPlan(r) {
     const counts = getRoleCounts()[r.name];
     const expandFlagsAndCreep = (Game.flags["expand"] && Object.values(Game.creeps).filter(c => c.memory.role === "claimer").length === 0) ? true : false;
     const expandFlagExists = Game.flags["expand"];
+    const bansheeFlagsAndCreep = (Game.flags["bansheeAttack"] && Object.values(Game.creeps).filter(c => c.memory.role === "banshee").length === 0) ? true : false;
+    const bansheeFlagExists = Game.flags["bansheeAttack"];
     let plan;
     switch (getGamePhase(r)) {
         case "BOOT": {
@@ -4005,6 +4025,7 @@ function getRoomSpawnPlan(r) {
                 upgrader: { desired: 1, body: bodyPlan.upgrader },
                 miner: { desired: 2, body: bodyPlan.miner },
                 claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
+                banshee: { desired: bansheeFlagExists && bansheeFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { move: 6, ranged_attack: 5 } }
             };
             break;
         }
@@ -4032,6 +4053,7 @@ function getRoomSpawnPlan(r) {
                 builder: { desired: (r.find(FIND_CONSTRUCTION_SITES).length > 0) ? 2 : 0, minEnergy: ((_a = counts === null || counts === void 0 ? void 0 : counts.builder) !== null && _a !== void 0 ? _a : 0) > 0 ? 750 : 250, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader, minEnergy: ((_b = counts === null || counts === void 0 ? void 0 : counts.upgrader) !== null && _b !== void 0 ? _b : 0) > 0 ? 600 : 300, },
                 claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
+                banshee: { desired: bansheeFlagExists && bansheeFlagsAndCreep ? 1 : 0, minEnergy: 1050, body: { move: 6, ranged_attack: 5 } }
             };
             break;
         }
@@ -4043,6 +4065,7 @@ function getRoomSpawnPlan(r) {
                 builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader },
                 claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
+                banshee: { desired: bansheeFlagExists && bansheeFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { move: 6, ranged_attack: 5 } }
             };
             break;
         }
@@ -4054,6 +4077,7 @@ function getRoomSpawnPlan(r) {
                 builder: { desired: sites > 0 ? 1 : 0, minEnergy: 100, body: bodyPlan.builder },
                 upgrader: { desired: 1, body: bodyPlan.upgrader },
                 claimer: { desired: expandFlagExists && expandFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { work: 1, carry: 1, move: 3, claim: 1 } },
+                banshee: { desired: bansheeFlagExists && bansheeFlagsAndCreep ? 1 : 0, minEnergy: 1000, body: { move: 6, ranged_attack: 5 } }
             };
             break;
         }
@@ -4235,6 +4259,123 @@ const claimer = {
     }
 };
 
+const banshee = {
+    /*
+      The banshee role is intended to be a offensive combat unit
+      specalizing in harassment of enemy workers
+  
+      TASKS
+      travel
+      scout - log to Memory for analysis
+      harrass - attack >20 tiles from tower for minimum dmg
+      retreat - don't feed enemy
+     
+    */
+    run(c) {
+        const bansheeFlag = Game.flags["bansheeAttack"];
+        c.room;
+        let task = getTask(c);
+        let target = getTarget(c);
+        function nudgeOffEdge(c) {
+            if (c.pos.x === 0) {
+                c.move(RIGHT);
+                return true;
+            }
+            if (c.pos.x === 49) {
+                c.move(LEFT);
+                return true;
+            }
+            if (c.pos.y === 0) {
+                c.move(BOTTOM);
+                return true;
+            }
+            if (c.pos.y === 49) {
+                c.move(TOP);
+                return true;
+            }
+            return false;
+        }
+        if (!task) {
+            setTask(c, "travel");
+            task = "travel";
+        }
+        if (task === "travel") {
+            // set target
+            if (!target) {
+                target = bansheeFlag;
+                setTarget(c, bansheeFlag, "flag");
+            }
+            else {
+                if (c.room.name === target.pos.roomName) {
+                    task = "scout";
+                    target = null;
+                    setTask(c, "scout");
+                    setTarget(c, null);
+                }
+                if (nudgeOffEdge(c)) {
+                    return;
+                }
+                c.moveTo(target);
+            }
+        }
+        if (task === "scout") {
+            c.say("ADD SCOUTING!");
+            task = "harass";
+            setTask(c, "harass");
+        }
+        if (task === "harass") {
+            const enemyTowers = c.room.find(FIND_HOSTILE_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
+            const enemyCreepsSafeDistance = c.room.find(FIND_HOSTILE_CREEPS).filter(h => !enemyTowers.some(t => h.pos.getRangeTo(t) <= 20));
+            const closestEnemyCreep_Over20 = c.pos.findClosestByPath(enemyCreepsSafeDistance);
+            const hostileContainers = c.room.find(FIND_STRUCTURES).filter((s) => s.structureType === STRUCTURE_CONTAINER);
+            const hostileTowers = c.room.find(FIND_HOSTILE_STRUCTURES).filter((s) => s.structureType === STRUCTURE_TOWER);
+            const hostileExtensions = c.room.find(FIND_HOSTILE_STRUCTURES).filter((s) => s.structureType === STRUCTURE_EXTENSION);
+            const hostileSpawns = c.room.find(FIND_HOSTILE_STRUCTURES).filter((s) => s.structureType === STRUCTURE_SPAWN);
+            if (!target) {
+                if (closestEnemyCreep_Over20) {
+                    target = closestEnemyCreep_Over20;
+                    setTarget(c, closestEnemyCreep_Over20, "creep");
+                }
+                else if (c.pos.findClosestByPath(FIND_HOSTILE_CREEPS)) {
+                    target = c.pos.findClosestByPath(FIND_HOSTILE_CREEPS);
+                    setTarget(c, target, "creep");
+                }
+                else if (hostileTowers.length > 0) {
+                    target = c.pos.findClosestByPath(hostileTowers);
+                    setTarget(c, target, "tower");
+                }
+                else if (hostileExtensions.length > 0) {
+                    target = c.pos.findClosestByPath(hostileExtensions);
+                    setTarget(c, target, "extension");
+                }
+                else if (hostileContainers.length > 0) {
+                    target = c.pos.findClosestByPath(hostileContainers);
+                    setTarget(c, target, "container");
+                }
+                else if (hostileSpawns.length > 0) {
+                    target = c.pos.findClosestByPath(hostileSpawns);
+                    setTarget(c, target, "spawn");
+                }
+            }
+            if (target) {
+                if (c.hits / c.hitsMax < 0.3) {
+                    task = "retreat";
+                    target = null;
+                    setTask(c, "retreat");
+                    setTarget(c, null);
+                }
+                else if (enemyCreepsSafeDistance.length > 0 && !enemyCreepsSafeDistance.includes(target)) {
+                    target = null;
+                    setTarget(c, null);
+                }
+                else if (c.rangedAttack(target) === ERR_NOT_IN_RANGE) {
+                    c.moveTo(target);
+                }
+            }
+        }
+    }
+};
+
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
 const loop = ErrorMapper.wrapLoop(() => {
@@ -4298,6 +4439,9 @@ const loop = ErrorMapper.wrapLoop(() => {
                 }
                 else if (c.memory.role === "claimer") {
                     claimer.run(c);
+                }
+                else if (c.memory.role === "banshee") {
+                    banshee.run(c);
                 }
             }
         }

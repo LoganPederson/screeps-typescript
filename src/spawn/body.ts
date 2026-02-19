@@ -77,7 +77,8 @@ export function getBodyPlan(r: Room) {
         builder: { work: 1, move: 1, carry: 1 },
         upgrader: { work: 1, move: 1, carry: 1 },
         miner: { work: 1, move: 1, carry: 1 },
-        claimer: { work: 1, carry: 1, move: 3, claim: 1 }
+        claimer: { work: 1, carry: 1, move: 3, claim: 1 },
+        banshee: { work: 1, carry: 1, move: 3, claim: 1 },
       }
       break
     }
@@ -88,7 +89,8 @@ export function getBodyPlan(r: Room) {
         builder: buildEfficientBuilder(r),
         upgrader: buildEfficientMiner(r),
         miner: buildEfficientMiner(r),
-        claimer: { work: 1, carry: 1, move: 3, claim: 1 }
+        claimer: { work: 1, carry: 1, move: 3, claim: 1 },
+        banshee: { work: 1, carry: 1, move: 3, claim: 1 },
 
       }
       break
@@ -100,7 +102,8 @@ export function getBodyPlan(r: Room) {
         builder: buildEfficientBuilder(r),
         upgrader: buildEfficientMiner(r),
         miner: buildEfficientMiner(r),
-        claimer: { work: 1, carry: 1, move: 3, claim: 1 }
+        claimer: { work: 1, carry: 1, move: 3, claim: 1 },
+        banshee: { work: 1, carry: 1, move: 3, claim: 1 },
 
       }
       break
@@ -112,7 +115,8 @@ export function getBodyPlan(r: Room) {
         builder: { work: 1, move: 1, carry: 1 },
         upgrader: { work: 1, move: 1, carry: 1 },
         miner: { work: 7, move: 1, carry: 1 },
-        claimer: { work: 1, carry: 1, move: 3, claim: 1 }
+        claimer: { work: 1, carry: 1, move: 3, claim: 1 },
+        banshee: { work: 1, carry: 1, move: 3, claim: 1 },
 
       }
       break

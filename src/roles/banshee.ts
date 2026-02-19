@@ -1,7 +1,7 @@
 
 import { FlagType } from "types/flags"
 import { RoleName } from "types/roles"
-import { getTarget, getTask, setTask, setTarget, TargetType } from "utility/memory"
+import { getTarget, getTask, setTask, setTarget, TargetType, Target } from "utility/memory"
 export const banshee = {
 
   /*
@@ -9,10 +9,10 @@ export const banshee = {
     specalizing in harassment of enemy workers
 
     TASKS
-    moveToRally
-    Scout - log to Memory for analysis
-    Harass - attack >20 tiles from tower for minimum dmg
-    Heal/Retreat - don't feed enemy
+    travel
+    scout - log to Memory for analysis
+    harrass - attack >20 tiles from tower for minimum dmg
+    retreat - don't feed enemy
    
   */
   run(c: Creep): void {
@@ -28,81 +28,85 @@ export const banshee = {
       if (c.pos.y === 49) { c.move(TOP); return true }
       return false
     }
-    if (!task) { c.store.getFreeCapacity(RESOURCE_ENERGY) > 0 ? setTask(c, "refillEnergy") : setTask(c, "work") }
 
-    if (task === "refillEnergy") {
+    if (!task) { setTask(c, "travel"); task = "travel" }
+
+    if (task === "travel") {
       // set target
       if (!target) {
-        if (closestStorageProvider) {
-          setTarget(c, closestStorageProvider, "storage")
-        }
-        if (closestContainerProvider) {
-          setTarget(c, closestContainerProvider, "container")
-        }
-        else if (closestContainer) {
-          setTarget(c, closestContainer)
-        }
-        else {
-          // If no valid targets, emergency fallback to harvester mode -- no work parts though?
-          // c.memory.role = "harvester"
-          // delete c.memory.task
-          // delete c.memory.targetID
-          // delete c.memory.targetType
-          c.say("No valid pickup targets!")
-        }
+        target = bansheeFlag
+        setTarget(c, bansheeFlag, "flag")
       }
       else {
-        let t = target as AnyStoreStructure
-        if (c.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
-          task = "work"
+        if (c.room.name === (target as Flag).pos.roomName) {
+          task = "scout"
           target = null
-          setTask(c, task)
-          setTarget(c, target)
+          setTask(c, "scout")
+          setTarget(c, null)
         }
-        else if ((t.store.getUsedCapacity(RESOURCE_ENERGY) < c.store.getCapacity(RESOURCE_ENERGY))) {
-          target = null
-          setTarget(c, target)
-        }
-        else if (c.withdraw(target as AnyStoreStructure, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          c.moveTo(target as AnyStoreStructure)
-        }
+        if (nudgeOffEdge(c)) { return }
+        c.moveTo(target as Flag)
       }
     }
+    if (task === "scout") {
+      c.say("ADD SCOUTING!")
+      task = "harass"
+      setTask(c, "harass")
+    }
 
-    if (task === "work") {
-      if (!target) {
-        if (c.room.name === bansheeFlag.pos.roomName) {
-          const targetController: StructureController | undefined = Game.rooms[bansheeFlag.pos.roomName].controller
-          if (targetController) {
-            target = targetController
-            setTarget(c, targetController, "controller")
-          }
-          else {
-            c.say("No controller!")
-            console.log(`Creep ${c.name} has no target controller in flag room specified!`)
-          }
-        }
-        else {
-          if (nudgeOffEdge(c)) { console.log("nudging"); return }
-          c.moveTo(bansheeFlag)
+    if (task === "harass") {
+      const enemyTowers: StructureTower[] = c.room.find(FIND_HOSTILE_STRUCTURES).filter((s): s is StructureTower => s.structureType === STRUCTURE_TOWER)
+      const enemyCreepsSafeDistance: Creep[] = c.room.find(FIND_HOSTILE_CREEPS).filter(h => !enemyTowers.some(t => h.pos.getRangeTo(t) <= 20))
+      const closestEnemyCreep_Over20 = c.pos.findClosestByPath(enemyCreepsSafeDistance)
+      const hostileContainers: StructureContainer[] = c.room.find(FIND_STRUCTURES).filter((s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER)
+      const hostileTowers: StructureTower[] = c.room.find(FIND_HOSTILE_STRUCTURES).filter((s): s is StructureTower => s.structureType === STRUCTURE_TOWER)
+      const hostileExtensions: StructureExtension[] = c.room.find(FIND_HOSTILE_STRUCTURES).filter((s): s is StructureExtension => s.structureType === STRUCTURE_EXTENSION)
+      const hostileSpawns: StructureSpawn[] = c.room.find(FIND_HOSTILE_STRUCTURES).filter((s): s is StructureSpawn => s.structureType === STRUCTURE_SPAWN)
+      function creepRangedAttack(c: Creep, t: Target): void {
+        if (c.rangedAttack(t as AnyCreep) === ERR_NOT_IN_RANGE) {
+          c.moveTo(t as AnyCreep)
         }
       }
-      if (target) {
-        if (nudgeOffEdge(c)) { return }
-        console.log(c.claimController(target as StructureController))
-        if (c.claimController(target as StructureController) === ERR_NOT_IN_RANGE) {
-          c.moveTo(target as StructureController)
+      if (!target) {
+        if (closestEnemyCreep_Over20) {
+          target = closestEnemyCreep_Over20
+          setTarget(c, closestEnemyCreep_Over20, "creep")
         }
-        else if (c.claimController(target as StructureController) === ERR_INVALID_TARGET || (c.claimController(target as StructureController) === ERR_GCL_NOT_ENOUGH)) {
-          console.log('test')
-          if (c.room.controller?.owner === Game.rooms[0].controller?.owner) {
-            c.memory.role = "upgrader"
-            delete c.memory.task
-            delete c.memory.targetID
-            delete c.memory.targetType
-            bansheeFlag.remove()
-            Game.notify(`Claimed room ${c.room}`)
-          }
+        else if (c.pos.findClosestByPath(FIND_HOSTILE_CREEPS)) {
+          target = c.pos.findClosestByPath(FIND_HOSTILE_CREEPS)
+          setTarget(c, target, "creep")
+        }
+        else if (hostileTowers.length > 0) {
+          target = c.pos.findClosestByPath(hostileTowers)
+          setTarget(c, target, "tower")
+        }
+        else if (hostileExtensions.length > 0) {
+          target = c.pos.findClosestByPath(hostileExtensions)
+          setTarget(c, target, "extension")
+        }
+        else if (hostileContainers.length > 0) {
+          target = c.pos.findClosestByPath(hostileContainers)
+          setTarget(c, target, "container")
+        }
+        else if (hostileSpawns.length > 0) {
+          target = c.pos.findClosestByPath(hostileSpawns)
+          setTarget(c, target, "spawn")
+        }
+      }
+
+      if (target) {
+        if (c.hits / c.hitsMax < 0.3) {
+          task = "retreat"
+          target = null
+          setTask(c, "retreat")
+          setTarget(c, null)
+        }
+        else if (enemyCreepsSafeDistance.length > 0 && !enemyCreepsSafeDistance.includes(target as Creep)) {
+          target = null
+          setTarget(c, null)
+        }
+        else if (c.rangedAttack(target as Creep) === ERR_NOT_IN_RANGE) {
+          c.moveTo(target as Creep)
         }
       }
     }
